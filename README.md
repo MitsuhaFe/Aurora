@@ -1,18 +1,30 @@
 # Aurora ✨
 
 <div align="center">
-  <img src="docs/images/logo.png" alt="Aurora Logo" width="200"/>
-  
+  <h1>🌟 极光 Aurora 🌟</h1>
   <h3>轻量级、高性能的桌面美化软件</h3>
   
-  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-  [![Version](https://img.shields.io/badge/version-0.1.0--alpha-orange.svg)](https://github.com/MitsuhaFe/aurora/releases)
+  [![License](https://img.shields.io/badge/license-MIT-blue.svg)](docs/LICENSE)
+  [![Version](https://img.shields.io/badge/version-0.1.0--alpha-orange.svg)](#)
   [![Platform](https://img.shields.io/badge/platform-Windows%2010%2F11-lightgrey.svg)](https://www.microsoft.com/windows)
   [![Tauri](https://img.shields.io/badge/Tauri-1.5%2B-blue.svg)](https://tauri.app/)
   [![Vue](https://img.shields.io/badge/Vue-3.3%2B-green.svg)](https://vuejs.org/)
   
-  [English](README_EN.md) | 简体中文
+  **✅ 项目框架已完成 | 🚀 可立即运行**
 </div>
+
+---
+
+## 🎊 项目状态
+
+**当前阶段：阶段 1 - 项目框架搭建 ✅ 完成**
+
+- ✅ 完整的 Vue 3 + Tauri 项目结构
+- ✅ 精美的欢迎页面和设置页面
+- ✅ Pinia 状态管理
+- ✅ IPC 通信框架（占位）
+- ⏳ C++ 后端（待开发）
+- ⏳ 实际功能（待开发）
 
 ---
 
@@ -38,10 +50,6 @@
 - ✅ 鼠标悬停放大动画效果
 - ✅ 右键快捷菜单（退出、固定、查看详情）
 
-<div align="center">
-  <img src="docs/images/dock-preview.gif" alt="Dock 栏演示" width="600"/>
-</div>
-
 ### 2. 🖼️ 动态/静态壁纸系统
 
 支持多种壁纸类型，让你的桌面动起来：
@@ -52,10 +60,6 @@
 | **视频壁纸** | MP4, MKV, AVI, WEBM | 基于 libmpv，支持硬件解码 |
 | **网页壁纸** | HTML, URL | 支持交互式网页和 WebGL 动画 |
 
-<div align="center">
-  <img src="docs/images/wallpaper-preview.gif" alt="壁纸演示" width="600"/>
-</div>
-
 ### 3. 🐱 虚拟桌宠
 
 可爱的桌面宠物陪伴你的工作：
@@ -64,10 +68,6 @@
 - ✅ 精灵图动画（待机、行走、睡觉等状态）
 - ✅ 基础交互（点击反馈）
 - ✅ 位置记忆功能
-
-<div align="center">
-  <img src="docs/images/pet-preview.gif" alt="桌宠演示" width="300"/>
-</div>
 
 ### 4. 📊 桌面小组件
 
@@ -79,160 +79,115 @@
 - ✅ **待办事项：** 简单的任务管理
 - 📝 **便签：** 快速记录灵感
 
-<div align="center">
-  <img src="docs/images/widgets-preview.png" alt="小组件演示" width="600"/>
-</div>
-
 ---
 
 ## 🚀 快速开始
 
-### 方式一：下载安装包（推荐）
-
-1. 访问 [Releases 页面](https://github.com/MitsuhaFe/aurora/releases)
-2. 下载最新版本的安装包（`.msi` 或 `.exe`）
-3. 双击运行安装程序
-4. 首次启动会在系统托盘显示图标，右键可打开设置面板
-
-### 方式二：从源码构建
-
-#### 前置要求
-
-- **Node.js** 18.0+ ([下载](https://nodejs.org/))
-- **Rust** 1.70+ ([下载](https://rustup.rs/))
-- **pnpm** 8.0+ (`npm install -g pnpm`)
-- **Visual Studio 2019+** (Windows C++ 开发工具)
-- **CMake** 3.20+ ([下载](https://cmake.org/download/))
-
-#### 构建步骤
+### 方式一：立即运行（开发模式）⭐
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/MitsuhaFe/aurora.git
-cd aurora
-
-# 2. 安装前端依赖
+# 1. 安装依赖（首次运行）
 pnpm install
 
-# 3. 构建 C++ 后端
-cd aurora-core
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-cmake --build . --config Release
-
-# 4. 复制 Sidecar 到 Tauri 目录
-# Windows
-copy .\bin\Release\AuroraCore.exe ..\..\src-tauri\bin\
-
-# macOS/Linux
-cp ./bin/AuroraCore ../../src-tauri/bin/
-
-# 5. 启动开发模式
-cd ../..
-pnpm tauri dev
-
-# 6. 打包生产版本
-pnpm tauri build
+# 2. 启动开发服务器
+pnpm tauri:dev
 ```
 
-构建产物位于 `src-tauri/target/release/bundle/` 目录下。
+**首次启动需要 2-5 分钟**（编译 Rust 代码）
+
+启动成功后会打开 Aurora 应用窗口，可以看到：
+- ✨ 精美的欢迎页面
+- ⚙️ 完整的设置界面
+- 🎨 现代化的 UI 设计
+
+### 方式二：仅开发前端 UI
+
+```bash
+# 启动 Vite 开发服务器
+pnpm dev
+
+# 浏览器访问 http://localhost:5173
+```
+
+适合快速开发前端界面，体验热重载。
+
+### 方式三：从源码完整构建（待 C++ 后端完成）
+
+详见 [快速开始指南](docs/快速开始指南.md)
 
 ---
 
-## 📚 使用指南
+## 📖 详细文档
 
-### 基础操作
-
-1. **打开设置面板：** 右键系统托盘图标 → 设置
-2. **更换壁纸：** 设置面板 → 壁纸 → 选择文件/输入 URL
-3. **添加小组件：** 设置面板 → 小组件 → 点击 "+" 选择类型
-4. **自定义 Dock：** 右键应用图标 → 固定到 Dock
-5. **启用桌宠：** 设置面板 → 桌宠 → 启用
-
-### 快捷键
-
-| 快捷键 | 功能 |
-|--------|------|
-| `Ctrl + Alt + S` | 打开设置面板 |
-| `Ctrl + Alt + D` | 显示/隐藏 Dock 栏 |
-| `Ctrl + Alt + W` | 壁纸快速切换 |
-| `Ctrl + Alt + P` | 显示/隐藏桌宠 |
-
-### 配置文件
-
-配置文件位于：
-
-```
-C:\Users\<用户名>\AppData\Roaming\com.aurora.desktop\config.json
-```
-
-可以手动编辑或通过设置面板修改。
+- **[立即开始](立即开始.md)** - 5 分钟快速入门 ⭐
+- **[快速开始指南](docs/快速开始指南.md)** - 完整的入门教程
+- **[开发文档](docs/Aurora开发文档（详细版）.md)** - 详细的技术文档
+- **[开发计划](docs/开发计划.md)** - 项目开发进度
+- **[项目搭建报告](项目搭建完成报告.md)** - 框架搭建总结
 
 ---
 
-## 🛠️ 技术架构
-
-### 技术栈
-
-<table>
-  <tr>
-    <th>层级</th>
-    <th>技术</th>
-    <th>说明</th>
-  </tr>
-  <tr>
-    <td><b>前端 UI</b></td>
-    <td>Vue 3 + TypeScript + Vite</td>
-    <td>响应式界面，Composition API</td>
-  </tr>
-  <tr>
-    <td><b>应用容器</b></td>
-    <td>Tauri 1.5</td>
-    <td>使用系统原生 WebView2（Edge Chromium）</td>
-  </tr>
-  <tr>
-    <td><b>后端核心</b></td>
-    <td>C++ 17 (Sidecar)</td>
-    <td>负责系统 API 调用、视频渲染、数据采集</td>
-  </tr>
-  <tr>
-    <td><b>通信协议</b></td>
-    <td>IPC (stdin/stdout JSON)</td>
-    <td>前后端通过 JSON 进行进程间通信</td>
-  </tr>
-  <tr>
-    <td><b>关键库</b></td>
-    <td>libmpv, WebView2 SDK, nlohmann/json</td>
-    <td>视频播放、网页渲染、JSON 解析</td>
-  </tr>
-</table>
-
-### 架构图
+## 📁 项目结构
 
 ```
-┌───────────────────────────────────────────┐
-│          Tauri 容器 (WebView2)             │
-│  ┌─────────────────────────────────────┐  │
-│  │       Vue 3 前端 (UI Layer)         │  │
-│  │  • Dock.vue                         │  │
-│  │  • Settings.vue                     │  │
-│  │  • Widgets/*.vue                    │  │
-│  └─────────────────────────────────────┘  │
-└───────────────────────────────────────────┘
-         ↕ IPC (JSON via stdin/stdout)
-┌───────────────────────────────────────────┐
-│     C++ 后端 (AuroraCore.exe)             │
-│  • WallpaperModule (libmpv + WebView2)    │
-│  • DockModule (EnumWindows + WinAPI)      │
-│  • WidgetModule (PDH + cpr)               │
-└───────────────────────────────────────────┘
-         ↕
-┌───────────────────────────────────────────┐
-│      操作系统 API (Windows API)            │
-└───────────────────────────────────────────┘
+Aurora/
+├── src/                    # Vue 3 前端源代码 ✅
+│   ├── views/              # 页面组件
+│   │   ├── Home.vue        # 主页欢迎页 ✅
+│   │   └── Settings/       # 设置页面 ✅
+│   ├── stores/             # Pinia 状态管理 ✅
+│   │   ├── appStore.ts     # 应用状态
+│   │   └── wallpaperStore.ts  # 壁纸状态
+│   ├── composables/        # 组合式函数 ✅
+│   │   └── useTauriBridge.ts  # IPC 通信
+│   ├── router/             # 路由配置 ✅
+│   └── styles/             # 全局样式 ✅
+├── src-tauri/              # Tauri 配置 ✅
+│   ├── src/main.rs         # Rust 入口
+│   ├── tauri.conf.json     # Tauri 配置
+│   └── Cargo.toml          # Rust 依赖
+├── aurora-core/            # C++ 后端 ⏳ 待开发
+├── docs/                   # 项目文档 ✅
+└── scripts/                # 构建脚本 ✅
 ```
 
-详细技术文档请参阅 [Aurora开发文档（详细版）.md](Aurora开发文档（详细版）.md)
+**完整目录结构**请查看 [快速开始指南](docs/快速开始指南.md#-当前项目结构)
+
+---
+
+## 🛠️ 技术栈
+
+### 前端
+- **框架：** Vue 3.3 (Composition API)
+- **构建：** Vite 5.0
+- **语言：** TypeScript 5.0
+- **状态：** Pinia 2.0
+- **路由：** Vue Router 4.0
+
+### 容器
+- **Tauri** 1.5
+- **WebView2** (Edge Chromium)
+
+### 后端（待开发）
+- **C++17** (核心模块)
+- **libmpv** (视频播放)
+- **WebView2 SDK** (网页壁纸)
+
+---
+
+## 🎨 界面预览
+
+### 主页
+- 精美的渐变背景
+- 功能介绍卡片
+- 流畅的动画效果
+
+### 设置页面
+- 侧边栏导航
+- 多个设置面板
+- 现代化设计
+
+**查看实际效果：** 运行 `pnpm tauri:dev`
 
 ---
 
@@ -248,39 +203,7 @@ C:\Users\<用户名>\AppData\Roaming\com.aurora.desktop\config.json
 4. **推送到分支** (`git push origin feature/AmazingFeature`)
 5. **提交 Pull Request**
 
-### 开发规范
-
-- **代码风格：** 遵循 ESLint（前端）和 Google C++ Style Guide（后端）
-- **Commit 规范：** 使用 [Conventional Commits](https://www.conventionalcommits.org/)
-  - `feat`: 新功能
-  - `fix`: Bug 修复
-  - `docs`: 文档更新
-  - `style`: 代码格式调整
-  - `refactor`: 重构
-  - `perf`: 性能优化
-  - `test`: 测试相关
-  - `chore`: 构建/工具链相关
-
-### 开发环境配置
-
-请参考 [开发文档 - 第3章：开发环境配置](Aurora开发文档（详细版）.md#3-开发环境配置)
-
----
-
-## 🐛 问题反馈
-
-如果您在使用过程中遇到问题，请：
-
-1. 查看 [常见问题](Aurora开发文档（详细版）.md#12-常见问题与解决方案)
-2. 搜索 [已有 Issues](https://github.com/MitsuhaFe/aurora/issues)
-3. 如果问题未被报告，请 [创建新 Issue](https://github.com/MitsuhaFe/aurora/issues/new)
-
-提交 Issue 时，请包含：
-
-- 操作系统版本（如 Windows 11 22H2）
-- Aurora 版本号
-- 复现步骤
-- 错误截图或日志（位于 `%APPDATA%\com.aurora.desktop\logs\`）
+详见 [贡献指南](docs/CONTRIBUTING.md)
 
 ---
 
@@ -312,21 +235,19 @@ C:\Users\<用户名>\AppData\Roaming\com.aurora.desktop\config.json
 
 ---
 
+## 🐛 问题反馈
+
+如果您在使用过程中遇到问题，请：
+
+1. 查看 [常见问题](docs/Aurora开发文档（详细版）.md#12-常见问题与解决方案)
+2. 搜索 [已有 Issues](https://github.com/MitsuhaFe/aurora/issues)
+3. 如果问题未被报告，请 [创建新 Issue](https://github.com/MitsuhaFe/aurora/issues/new)
+
+---
+
 ## 📄 许可证
 
-本项目采用 [MIT License](LICENSE) 开源协议。
-
-这意味着您可以：
-
-- ✅ 商业使用
-- ✅ 修改和分发
-- ✅ 私人使用
-- ✅ 用于专利授权
-
-但需要：
-
-- ⚠️ 包含原始许可证和版权声明
-- ⚠️ 声明对原作品的修改
+本项目采用 [MIT License](docs/LICENSE) 开源协议。
 
 ---
 
@@ -347,87 +268,18 @@ C:\Users\<用户名>\AppData\Roaming\com.aurora.desktop\config.json
 - Rainmeter
 - uTools
 
-### 贡献者
-
-感谢所有为 Aurora 做出贡献的开发者！
-
-<a href="https://github.com/MitsuhaFe/aurora/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=MitsuhaFe/aurora" />
-</a>
-
 ---
 
 ## 📞 联系方式
 
-- **项目主页：** [https://aurora-desktop.com](https://aurora-desktop.com)
 - **GitHub：** [https://github.com/MitsuhaFe/aurora](https://github.com/MitsuhaFe/aurora)
-- **Discord 社区：** [加入讨论](https://discord.gg/aurora)
-- **邮箱：** MitsuhaFe@gmail.com
-
----
-
-## 💖 支持项目
-
-如果您喜欢 Aurora，可以通过以下方式支持我们：
-
-- ⭐ 给项目点个 Star
-- 🐛 报告 Bug 和提出改进建议
-- 📝 完善文档和教程
-- 💻 贡献代码
-- 📢 向朋友推荐 Aurora
-
-您的支持是我们持续改进的动力！
-
----
-
----
-
-## 📝 变更日志
-
-### 2024-10-30
-
-**Prompt：** 根据精简版开发文档生成详细的开发文档和README.md
-
-**Changes：**
-1. ✅ 创建了 `Aurora开发文档（详细版）.md`
-   - 完整的技术架构设计（14个主要章节）
-   - C++ 后端核心模块实现（包含代码示例）
-   - Vue 3 前端组件实现（Dock、小组件等）
-   - IPC 通信协议详细说明
-   - CMakeLists.txt 配置示例
-   - 开发工作流和部署指南
-   - 性能优化、安全性、测试策略
-   - 常见问题与解决方案
-   - 未来规划路线图
-
-2. ✅ 创建了 `README.md` 项目说明文档
-   - 项目简介和核心功能展示
-   - 快速开始指南（安装包 + 源码构建）
-   - 使用指南和快捷键说明
-   - 技术架构简介
-   - 贡献指南和开发规范
-   - 项目路线图（v0.2.0 - v1.0.0）
-   - 许可证和鸣谢信息
-
-**改进内容：**
-- 📌 修正了精简版文档中的技术细节（基于最新的 Tauri 1.5+）
-- 📌 补充了完整的 C++ 代码实现示例（壁纸模块、Dock 模块、小组件模块）
-- 📌 添加了详细的 IPC 通信机制说明和 TypeScript 类型定义
-- 📌 提供了 CMake 构建配置和自动化脚本
-- 📌 增加了性能优化、安全性和测试策略章节
-- 📌 补充了 Windows API 函数参考表
-- 📌 添加了编码规范和 Git Commit 规范
-
-**技术验证：**
-- ✅ Tauri Sidecar 架构可行性已确认
-- ✅ libmpv 集成方案参考了 Lively Wallpaper 开源项目
-- ✅ WebView2 在 WorkerW 窗口中的集成方案已验证
-- ✅ IPC 通信协议设计遵循 Tauri 官方最佳实践
+- **问题反馈：** [创建 Issue](https://github.com/MitsuhaFe/aurora/issues/new)
 
 ---
 
 <div align="center">
+  <h2>💖 感谢使用 Aurora！</h2>
+  <p>如果您喜欢这个项目，请给我们一个 ⭐ Star</p>
   <p>Made with ❤️ by Aurora Team</p>
   <p>Copyright © 2024 Aurora Desktop. All rights reserved.</p>
 </div>
-
