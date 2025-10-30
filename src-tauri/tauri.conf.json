@@ -17,7 +17,13 @@
       "shell": {
         "all": false,
         "sidecar": true,
-        "scope": []
+        "scope": [
+          {
+            "name": "bin/AuroraCore",
+            "sidecar": true,
+            "args": true
+          }
+        ]
       },
       "window": {
         "all": true,
@@ -53,7 +59,10 @@
       "active": true,
       "targets": "all",
       "identifier": "com.aurora.desktop",
-      "externalBin": [],
+      "icon": [
+        "icons/icon.ico"
+      ],
+      "externalBin": ["bin/AuroraCore"],
       "resources": []
     },
     "security": {

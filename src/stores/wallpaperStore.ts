@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { sendCommand, onEvent } from '@/composables/useTauriBridge';
 
 export type WallpaperType = 'static' | 'video' | 'web';
 
@@ -28,8 +29,8 @@ export const useWallpaperStore = defineStore('wallpaper', () => {
   async function setStaticWallpaper(path: string) {
     isLoading.value = true;
     try {
-      // TODO: 调用 C++ 后端设置壁纸
-      // await sendCommand('set_static_wallpaper', { path });
+      // 调用 C++ 后端设置壁纸
+      await sendCommand('set_static_wallpaper', { path });
       
       currentWallpaper.value = {
         type: 'static',
@@ -37,6 +38,7 @@ export const useWallpaperStore = defineStore('wallpaper', () => {
       };
       
       addToHistory(currentWallpaper.value);
+      console.log('静态壁纸设置成功:', path);
     } catch (error) {
       console.error('设置静态壁纸失败:', error);
       throw error;
@@ -48,8 +50,8 @@ export const useWallpaperStore = defineStore('wallpaper', () => {
   async function setVideoWallpaper(path: string, options?: { volume?: number; loop?: boolean }) {
     isLoading.value = true;
     try {
-      // TODO: 调用 C++ 后端设置视频壁纸
-      // await sendCommand('set_video_wallpaper', { path, ...options });
+      // 调用 C++ 后端设置视频壁纸
+      await sendCommand('set_dynamic_wallpaper', { path, ...options });
       
       currentWallpaper.value = {
         type: 'video',
@@ -59,6 +61,7 @@ export const useWallpaperStore = defineStore('wallpaper', () => {
       };
       
       addToHistory(currentWallpaper.value);
+      console.log('动态壁纸设置成功:', path);
     } catch (error) {
       console.error('设置视频壁纸失败:', error);
       throw error;

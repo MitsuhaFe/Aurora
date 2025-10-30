@@ -64,10 +64,10 @@
               <p>选择壁纸的类型</p>
             </div>
             <div class="setting-control">
-              <select class="select-input">
+              <select v-model="wallpaperType" class="select-input" @change="selectedFilePath = ''; statusMessage = ''">
                 <option value="static">静态图片</option>
                 <option value="video">视频壁纸</option>
-                <option value="web">网页壁纸</option>
+                <option value="web">网页壁纸（暂不可用）</option>
               </select>
             </div>
           </div>
@@ -75,10 +75,39 @@
           <div class="setting-item">
             <div class="setting-label">
               <h3>壁纸文件</h3>
-              <p>选择要使用的壁纸文件</p>
+              <p v-if="!selectedFilePath">点击按钮选择{{ wallpaperType === 'static' ? '图片' : '视频' }}文件</p>
+              <p v-else class="selected-file">{{ selectedFilePath }}</p>
             </div>
             <div class="setting-control">
-              <button class="btn btn-primary">选择文件</button>
+              <button 
+                class="btn btn-primary" 
+                @click="selectWallpaperFile"
+                :disabled="wallpaperType === 'web'"
+              >
+                {{ selectedFilePath ? '重新选择' : '选择文件' }}
+              </button>
+            </div>
+          </div>
+
+          <div v-if="wallpaperType === 'video'" class="setting-item">
+            <div class="setting-label">
+              <h3>提示</h3>
+              <p style="color: #f59e0b;">⚠️ 视频壁纸需要 ffplay.exe，请确保已安装 FFmpeg</p>
+            </div>
+          </div>
+          
+          <div v-if="selectedFilePath" class="setting-item" style="border: none; padding-top: 24px;">
+            <div class="wallpaper-actions">
+              <button 
+                class="btn btn-apply" 
+                @click="applyWallpaper"
+                :disabled="isApplying"
+              >
+                {{ isApplying ? '正在设置...' : '应用壁纸' }}
+              </button>
+              <span v-if="statusMessage" :class="['status-message', statusMessage.startsWith('✅') ? 'success' : statusMessage.startsWith('❌') ? 'error' : '']">
+                {{ statusMessage }}
+              </span>
             </div>
           </div>
         </div>
@@ -146,8 +175,11 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { open } from '@tauri-apps/api/dialog';
+import { useWallpaperStore } from '@/stores/wallpaperStore';
 
 const router = useRouter();
+const wallpaperStore = useWallpaperStore();
 
 interface MenuItem {
   id: string;
@@ -170,6 +202,79 @@ const activeTab = ref('general');
 const currentMenuItem = computed(() => {
   return menuItems.find((item) => item.id === activeTab.value);
 });
+
+// 壁纸设置
+const wallpaperType = ref<'static' | 'video' | 'web'>('static');
+const selectedFilePath = ref<string>('');
+const isApplying = ref(false);
+const statusMessage = ref<string>('');
+
+// 选择文件
+async function selectWallpaperFile() {
+  try {
+    let filters: any[] = [];
+    
+    if (wallpaperType.value === 'static') {
+      filters = [
+        { name: '图片文件', extensions: ['jpg', 'jpeg', 'png', 'bmp', 'webp'] },
+        { name: '所有文件', extensions: ['*'] }
+      ];
+    } else if (wallpaperType.value === 'video') {
+      filters = [
+        { name: '视频文件', extensions: ['mp4', 'mkv', 'avi', 'webm', 'mov'] },
+        { name: '所有文件', extensions: ['*'] }
+      ];
+    }
+
+    const selected = await open({
+      multiple: false,
+      directory: false,
+      filters: filters,
+    });
+
+    if (selected && typeof selected === 'string') {
+      selectedFilePath.value = selected;
+      statusMessage.value = `已选择: ${selected}`;
+      console.log('Selected file:', selected);
+    }
+  } catch (error) {
+    console.error('选择文件失败:', error);
+    statusMessage.value = '选择文件失败: ' + error;
+  }
+}
+
+// 应用壁纸
+async function applyWallpaper() {
+  if (!selectedFilePath.value) {
+    statusMessage.value = '请先选择文件';
+    return;
+  }
+
+  isApplying.value = true;
+  statusMessage.value = '正在设置壁纸...';
+
+  try {
+    if (wallpaperType.value === 'static') {
+      await wallpaperStore.setStaticWallpaper(selectedFilePath.value);
+      statusMessage.value = '✅ 静态壁纸设置成功！';
+    } else if (wallpaperType.value === 'video') {
+      await wallpaperStore.setVideoWallpaper(selectedFilePath.value, {
+        loop: true,
+        volume: 0
+      });
+      statusMessage.value = '✅ 动态壁纸设置成功！';
+    } else {
+      statusMessage.value = '网页壁纸功能尚未实现';
+    }
+    
+    console.log('Wallpaper applied successfully');
+  } catch (error) {
+    console.error('应用壁纸失败:', error);
+    statusMessage.value = '❌ 设置失败: ' + error;
+  } finally {
+    isApplying.value = false;
+  }
+}
 
 // 已移除返回主页功能，直接使用设置页面作为主界面
 </script>
@@ -431,6 +536,65 @@ const currentMenuItem = computed(() => {
   font-size: 13px;
   color: #667eea;
   font-weight: 500;
+}
+
+/* 壁纸设置特定样式 */
+.selected-file {
+  color: #667eea !important;
+  font-family: 'Consolas', 'Monaco', monospace;
+  font-size: 13px !important;
+  word-break: break-all;
+}
+
+.wallpaper-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+}
+
+.btn-apply {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 12px 32px;
+  font-size: 15px;
+}
+
+.btn-apply:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-apply:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.status-message {
+  font-size: 14px;
+  color: #6e6e73;
+  animation: fadeIn 0.3s ease;
+}
+
+.status-message.success {
+  color: #10b981;
+  font-weight: 500;
+}
+
+.status-message.error {
+  color: #ef4444;
+  font-weight: 500;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>
 
