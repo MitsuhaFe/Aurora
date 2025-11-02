@@ -16,11 +16,35 @@
       "all": false,
       "shell": {
         "all": false,
+        "open": true,
+        "execute": true,
         "sidecar": true,
         "scope": [
           {
             "name": "bin/AuroraCore",
             "sidecar": true,
+            "args": true
+          },
+          {
+            "name": "cmd",
+            "cmd": "cmd",
+            "args": [
+              "/c",
+              "start",
+              "",
+              {
+                "validator": ".*"
+              }
+            ]
+          },
+          {
+            "name": "explorer",
+            "cmd": "explorer",
+            "args": true
+          },
+          {
+            "name": "control",
+            "cmd": "control",
             "args": true
           }
         ]

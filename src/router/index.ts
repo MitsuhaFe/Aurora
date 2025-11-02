@@ -7,6 +7,11 @@ const routes: RouteRecordRaw[] = [
     name: 'Settings',
     component: () => import('@/views/Settings/Index.vue'),
   },
+  {
+    path: '/dock',
+    name: 'Dock',
+    component: () => import('@/views/Dock.vue'),
+  },
 ];
 
 const router = createRouter({

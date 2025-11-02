@@ -1,0 +1,325 @@
+/**
+ * Dock 栏独立样式
+ * 避免与应用其他样式冲突
+ * 轻量化设计，最小化 DOM 嵌套
+ */
+
+/* ==================== 全局重置（仅针对 Dock） ==================== */
+
+.dock-container * {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ==================== Dock 容器 ==================== */
+
+.dock-container {
+  /* 尺寸和位置由 inline style 动态控制 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  /* 层级 */
+  position: relative;
+  z-index: 9999;
+  
+  /* 外观 - 阴影和毛玻璃效果由 inline style 根据设置动态控制 */
+  
+  /* 交互 */
+  cursor: move;
+  user-select: none;
+  -webkit-user-select: none;
+  
+  /* 过渡动画 */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 固定位置时改变鼠标样式 */
+.dock-container.is-pinned {
+  cursor: default !important;
+}
+
+.dock-container:not(.is-pinned) {
+  cursor: move;
+}
+
+/* ==================== 图标容器 ==================== */
+
+.dock-icons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 0 16px;
+  height: 100%;
+}
+
+/* ==================== 单个图标 ==================== */
+
+.dock-icon {
+  /* 尺寸由 inline style 动态控制 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  
+  /* 交互 */
+  cursor: pointer;
+  
+  /* 过渡 */
+  transition: transform 0.2s ease;
+}
+
+/* 图标内容 */
+.dock-icon .icon-content {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  
+  /* 背景 */
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  
+  /* 边框 */
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  
+  /* 过渡 */
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 图标图片/emoji */
+.dock-icon .icon-image {
+  /* 字体大小由 inline style 动态控制 */
+  line-height: 1;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* 图标工具提示 */
+.dock-icon .icon-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  
+  /* 外观 */
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  
+  /* 阴影 */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  
+  /* 默认隐藏 */
+  opacity: 0;
+  pointer-events: none;
+  
+  /* 过渡 */
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* 悬浮时显示工具提示 */
+.dock-icon:hover .icon-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-12px);
+}
+
+/* 图标悬浮效果 */
+.dock-icon:hover .icon-content {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+/* 图标激活效果 */
+.dock-icon:active .icon-content {
+  transform: scale(0.95);
+}
+
+/* ==================== 添加图标按钮 ==================== */
+
+.dock-icon.add-icon .icon-content {
+  background: rgba(102, 126, 234, 0.2);
+  border-color: rgba(102, 126, 234, 0.4);
+}
+
+.dock-icon.add-icon:hover .icon-content {
+  background: rgba(102, 126, 234, 0.3);
+  border-color: rgba(102, 126, 234, 0.6);
+}
+
+/* 真实应用图标（图片） */
+.icon-image-file {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border-radius: 4px;
+  
+  /* 使用浏览器默认的高质量图像缩放算法 */
+  image-rendering: auto;
+  
+  /* 确保图像以最佳质量渲染 */
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  
+  /* 防止子像素渲染导致的模糊 */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* ==================== 悬浮动画样式 ==================== */
+
+/* 缩放动画 - 由 JS 动态控制 */
+.icon-content[data-animation="scale"] {
+  transform: scale(1.2);
+}
+
+/* 发光动画 - 由 JS 动态控制 */
+.icon-content[data-animation="glow"] {
+  filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
+}
+
+/* 组合动画 - 由 JS 动态控制 */
+.icon-content[data-animation="both"] {
+  transform: scale(1.2);
+  filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
+}
+
+/* ==================== 自动隐藏触发区域 ==================== */
+
+/* 触发区域：不可见，位于窗口顶部（Dock 隐藏前的位置） */
+.dock-trigger-area {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%; /* 覆盖整个窗口高度，因为窗口本身就是 Dock 的大小 */
+  background: transparent;
+  z-index: 9998; /* 比 Dock 低一层 */
+  pointer-events: auto;
+  
+  /* 调试用：取消注释可以看到触发区域 */
+  /* background: rgba(255, 0, 0, 0.2); */
+}
+
+/* ==================== 自动隐藏动画 ==================== */
+
+.dock-container.is-auto-hidden {
+  /* 完全向下移动，彻底隐藏 */
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), 
+              opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  
+  /* 移除所有视觉效果，确保完全不可见 */
+  opacity: 0 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  pointer-events: none; /* 隐藏时不接收鼠标事件 */
+}
+
+/* 鼠标悬浮在 Dock 上时显示（防止隐藏动画执行中误触） */
+.dock-container.is-auto-hidden:hover {
+  transform: translateY(0);
+  /* 恢复设置中的值 */
+  opacity: 1 !important; /* 恢复容器可见性 */
+  background-color: var(--dock-bg-color) !important; /* 恢复背景色（已包含透明度） */
+  box-shadow: var(--dock-shadow, 0 8px 32px rgba(0, 0, 0, 0.3)) !important;
+  backdrop-filter: var(--dock-backdrop, blur(20px)) !important;
+  -webkit-backdrop-filter: var(--dock-backdrop, blur(20px)) !important;
+  pointer-events: auto;
+}
+
+/* ==================== 响应式适配 ==================== */
+
+/* 小尺寸适配 */
+@media (max-width: 600px) {
+  .dock-icons {
+    gap: 8px;
+    padding: 0 12px;
+  }
+  
+  .dock-icon .icon-tooltip {
+    font-size: 11px;
+    padding: 4px 10px;
+  }
+}
+
+/* ==================== 可访问性 ==================== */
+
+/* 键盘焦点样式 */
+.dock-icon:focus-visible {
+  outline: 2px solid rgba(102, 126, 234, 0.8);
+  outline-offset: 2px;
+}
+
+/* ==================== 性能优化 ==================== */
+
+/* 使用 GPU 加速 */
+.dock-container,
+.dock-icon,
+.icon-content {
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+/* ==================== 拖动时的样式 ==================== */
+
+.dock-container:active:not(.is-pinned) {
+  cursor: grabbing;
+  opacity: 0.9;
+}
+
+/* ==================== 加载动画 ==================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dock-container {
+  animation: fadeIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ==================== 图标进入动画 ==================== */
+
+@keyframes iconPop {
+  0% {
+    transform: scale(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.dock-icon {
+  animation: iconPop 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 延迟动画 */
+.dock-icon:nth-child(1) { animation-delay: 0.05s; }
+.dock-icon:nth-child(2) { animation-delay: 0.1s; }
+.dock-icon:nth-child(3) { animation-delay: 0.15s; }
+.dock-icon:nth-child(4) { animation-delay: 0.2s; }
+.dock-icon:nth-child(5) { animation-delay: 0.25s; }
+.dock-icon:nth-child(6) { animation-delay: 0.3s; }
+.dock-icon:nth-child(7) { animation-delay: 0.35s; }
+.dock-icon:nth-child(8) { animation-delay: 0.4s; }
+

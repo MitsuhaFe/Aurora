@@ -8,7 +8,8 @@ import { WebviewWindow, LogicalSize, LogicalPosition } from '@tauri-apps/api/win
 export interface DockIcon {
   id: string;
   name: string;
-  icon: string; // 图标路径或 emoji
+  icon: string; // 图标 emoji（作为后备）
+  iconPath?: string; // 图标图片路径（base64 或 URL）
   path?: string; // 应用程序路径
   type: 'system' | 'app'; // 系统图标或应用图标
 }
@@ -235,6 +236,12 @@ export const useDockStore = defineStore('dock', () => {
   watch(
     icons,
     () => {
+      // 如果正在加载设置，跳过保存（避免覆盖刚加载的数据）
+      if (isLoadingSettings) {
+        console.log('⏭️ 正在加载设置，跳过图标保存');
+        return;
+      }
+      console.log('📝 图标已变化，触发自动保存');
       saveSettings();
     },
     { deep: true }

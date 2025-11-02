@@ -114,28 +114,280 @@
         
         <!-- Dock 设置 -->
         <div v-else-if="activeTab === 'dock'" class="settings-panel">
+          <!-- 启用 Dock -->
           <div class="setting-item">
             <div class="setting-label">
               <h3>显示 Dock 栏</h3>
-              <p>在桌面底部显示应用程序 Dock 栏</p>
+              <p>在桌面显示应用程序 Dock 栏</p>
             </div>
             <div class="setting-control">
-              <input type="checkbox" id="show-dock" checked />
+              <input 
+                type="checkbox" 
+                id="show-dock" 
+                v-model="dockStore.settings.enabled"
+                @change="handleDockToggle"
+              />
               <label for="show-dock" class="toggle"></label>
+            </div>
+          </div>
+          
+          <!-- 三个新增开关 -->
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>始终置顶</h3>
+              <p>Dock 栏始终保持在所有窗口的最顶层</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="always-on-top" 
+                v-model="dockStore.settings.alwaysOnTop"
+              />
+              <label for="always-on-top" class="toggle"></label>
             </div>
           </div>
           
           <div class="setting-item">
             <div class="setting-label">
-              <h3>Dock 位置</h3>
-              <p>设置 Dock 栏在屏幕上的位置</p>
+              <h3>固定位置</h3>
+              <p>禁用拖动，将 Dock 栏位置锁定在当前坐标</p>
             </div>
             <div class="setting-control">
-              <select class="select-input">
-                <option value="bottom">底部</option>
-                <option value="left">左侧</option>
-                <option value="right">右侧</option>
+              <input 
+                type="checkbox" 
+                id="pin-position" 
+                v-model="dockStore.settings.pinPosition"
+              />
+              <label for="pin-position" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>自动隐藏</h3>
+              <p>鼠标离开 2 秒后自动隐藏，鼠标靠近时显示</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="auto-hide" 
+                v-model="dockStore.settings.autoHide"
+              />
+              <label for="auto-hide" class="toggle"></label>
+            </div>
+          </div>
+          
+          <!-- 容器属性 -->
+          <div class="setting-section-title">容器属性</div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>长度</h3>
+              <p>Dock 栏的宽度 (120-1200px)</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="range" 
+                min="120" 
+                max="1200" 
+                step="10"
+                v-model.number="dockStore.settings.width"
+                class="slider"
+              />
+              <span class="value-display">{{ dockStore.settings.width }}px</span>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>高度</h3>
+              <p>Dock 栏的高度 (40-200px)</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="range" 
+                min="40" 
+                max="200" 
+                step="5"
+                v-model.number="dockStore.settings.height"
+                class="slider"
+              />
+              <span class="value-display">{{ dockStore.settings.height }}px</span>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>透明度</h3>
+              <p>Dock 栏的不透明度 (0-100%)</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.01"
+                v-model.number="dockStore.settings.opacity"
+                class="slider"
+              />
+              <span class="value-display">{{ Math.round(dockStore.settings.opacity * 100) }}%</span>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>圆角值</h3>
+              <p>Dock 栏的边框圆角 (0-80px)</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="range" 
+                min="0" 
+                max="80" 
+                step="2"
+                v-model.number="dockStore.settings.borderRadius"
+                class="slider"
+              />
+              <span class="value-display">{{ dockStore.settings.borderRadius }}px</span>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>背景色</h3>
+              <p>Dock 栏的背景颜色</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="color" 
+                v-model="dockStore.settings.backgroundColor"
+                class="color-input"
+              />
+              <span class="value-display">{{ dockStore.settings.backgroundColor }}</span>
+            </div>
+          </div>
+          
+          <!-- 样式效果 -->
+          <div class="setting-section-title">样式效果</div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>阴影效果</h3>
+              <p>为 Dock 栏添加阴影</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="has-shadow" 
+                v-model="dockStore.settings.hasShadow"
+              />
+              <label for="has-shadow" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>毛玻璃效果</h3>
+              <p>为 Dock 栏添加毛玻璃背景模糊</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="has-glass-effect" 
+                v-model="dockStore.settings.hasGlassEffect"
+              />
+              <label for="has-glass-effect" class="toggle"></label>
+            </div>
+          </div>
+          
+          <!-- 图标属性 -->
+          <div class="setting-section-title">图标属性</div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>图标大小</h3>
+              <p>Dock 栏中图标的大小 (32-160px)</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="range" 
+                min="32" 
+                max="160" 
+                step="4"
+                v-model.number="dockStore.settings.iconSize"
+                class="slider"
+              />
+              <span class="value-display">{{ dockStore.settings.iconSize }}px</span>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>图标透明度</h3>
+              <p>Dock 栏中图标的不透明度 (0-100%)</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="range" 
+                min="0" 
+                max="1" 
+                step="0.01"
+                v-model.number="dockStore.settings.iconOpacity"
+                class="slider"
+              />
+              <span class="value-display">{{ Math.round(dockStore.settings.iconOpacity * 100) }}%</span>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>悬浮动画</h3>
+              <p>鼠标悬浮时的图标动画效果</p>
+            </div>
+            <div class="setting-control">
+              <select v-model="dockStore.settings.hoverAnimation" class="select-input">
+                <option value="none">无动画</option>
+                <option value="scale">缩放</option>
+                <option value="glow">发光</option>
+                <option value="both">缩放 + 发光</option>
               </select>
+            </div>
+          </div>
+          
+          <!-- 图标管理 -->
+          <div class="setting-section-title">图标管理</div>
+          
+          <div class="icon-management">
+            <p class="management-description">管理 Dock 栏上的应用程序图标</p>
+            
+            <button class="btn-add-icon" @click="handleAddIcon">
+              <span class="icon">➕</span>
+              <span>添加应用图标</span>
+            </button>
+            
+            <div class="icon-list">
+              <div 
+                v-for="icon in dockStore.icons" 
+                :key="icon.id"
+                class="icon-item"
+              >
+                <div class="icon-preview">
+                  <!-- 优先显示真实图标 -->
+                  <img v-if="icon.iconPath" :src="icon.iconPath" class="icon-image" :alt="icon.name" />
+                  <span v-else class="icon-emoji">{{ icon.icon }}</span>
+                </div>
+                <div class="icon-info">
+                  <span class="icon-name">{{ icon.name }}</span>
+                  <span class="icon-type">{{ icon.type === 'system' ? '系统图标' : '自定义应用' }}</span>
+                </div>
+                <button 
+                  class="btn-remove"
+                  @click="handleRemoveIcon(icon.id)"
+                  :title="icon.type === 'system' ? '移除系统图标' : '移除自定义图标'"
+                >
+                  🗑️ 移除
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -173,13 +425,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { open } from '@tauri-apps/api/dialog';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
+import { useDockStore } from '@/stores/dockStore';
 
 const router = useRouter();
 const wallpaperStore = useWallpaperStore();
+const dockStore = useDockStore();
 
 interface MenuItem {
   id: string;
@@ -276,7 +530,136 @@ async function applyWallpaper() {
   }
 }
 
-// 已移除返回主页功能，直接使用设置页面作为主界面
+// Dock 相关方法
+async function handleDockToggle() {
+  try {
+    await dockStore.toggleDock(dockStore.settings.enabled);
+  } catch (error) {
+    console.error('切换 Dock 失败:', error);
+  }
+}
+
+/**
+ * 添加图标
+ */
+async function handleAddIcon() {
+  try {
+    console.log('📁 打开文件选择对话框...');
+    
+    const selected = await open({
+      multiple: false,
+      directory: false,
+      filters: [
+        { name: '应用程序', extensions: ['exe'] },
+        { name: '快捷方式', extensions: ['lnk'] },
+        { name: '所有文件', extensions: ['*'] }
+      ],
+    });
+    
+    if (selected && typeof selected === 'string') {
+      console.log('✅ 选择的文件:', selected);
+      
+      // 提取文件名
+      const fileName = selected.split('\\').pop()?.replace(/\.(exe|lnk)$/i, '') || 'App';
+      
+      console.log('🔍 正在提取应用图标...');
+      
+      // 尝试获取应用的真实图标
+      let iconPath = '';
+      
+      try {
+        const { invoke } = await import('@tauri-apps/api/tauri');
+        const result = await invoke<{ success: boolean; icon?: string; error?: string }>(
+          'extract_icon',
+          { exePath: selected }
+        );
+        
+        if (result.success && result.icon) {
+          iconPath = `data:image/png;base64,${result.icon}`;
+          console.log('✅ 成功获取应用图标');
+        } else {
+          console.warn('⚠️ 获取图标失败:', result.error);
+          console.log('💡 将使用默认图标');
+        }
+      } catch (error) {
+        console.warn('⚠️ 提取图标失败，使用默认图标:', error);
+      }
+      
+      // 添加新图标
+      dockStore.addIcon({
+        id: `app-${Date.now()}`,
+        name: fileName,
+        icon: '📦',
+        iconPath: iconPath || undefined,
+        path: selected,
+        type: 'app',
+      });
+      
+      console.log('✅ 图标已添加到 Dock:', fileName);
+      if (iconPath) {
+        console.log('✨ 使用真实应用图标');
+      } else {
+        console.log('📦 使用默认图标');
+      }
+    }
+  } catch (error) {
+    console.error('❌ 添加图标失败:', error);
+    alert('添加图标失败: ' + error);
+  }
+}
+
+/**
+ * 移除图标
+ */
+function handleRemoveIcon(iconId: string) {
+  // 直接移除，无需确认
+  console.log('🗑️ 移除图标:', iconId);
+  dockStore.removeIcon(iconId);
+  console.log('✅ 图标已移除');
+}
+
+// ==================== 跨窗口同步 ====================
+
+/**
+ * 监听 localStorage 变化（从 Dock 窗口同步）
+ */
+function handleStorageChange(e: StorageEvent) {
+  // 同步设置变化
+  if (e.key === 'aurora-dock-settings' && e.newValue) {
+    try {
+      const newSettings = JSON.parse(e.newValue);
+      Object.assign(dockStore.settings, newSettings);
+      console.log('🔄 从 Dock 窗口同步了设置');
+    } catch (error) {
+      console.error('❌ 解析设置失败:', error);
+    }
+  } 
+  // 同步图标变化
+  else if (e.key === 'aurora-dock-icons' && e.newValue) {
+    try {
+      const newIcons = JSON.parse(e.newValue);
+      dockStore.icons.length = 0;
+      dockStore.icons.push(...newIcons);
+      console.log('🔄 从 Dock 窗口同步了图标列表');
+    } catch (error) {
+      console.error('❌ 解析图标失败:', error);
+    }
+  }
+}
+
+// ==================== 生命周期 ====================
+
+onMounted(() => {
+  // 监听 localStorage 变化（从其他窗口）
+  window.addEventListener('storage', handleStorageChange);
+  console.log('✅ 设置页面已挂载，开始监听跨窗口数据同步');
+});
+
+onUnmounted(() => {
+  // 清理事件监听
+  window.removeEventListener('storage', handleStorageChange);
+  console.log('👋 设置页面已卸载，停止监听');
+});
 </script>
 
 <style scoped>
@@ -595,6 +978,241 @@ async function applyWallpaper() {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+/* Dock 设置特定样式 */
+.setting-section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #667eea;
+  margin: 24px 0 16px 0;
+  padding-top: 16px;
+  border-top: 1px solid #e5e5e7;
+}
+
+.setting-section-title:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* 滑块样式 */
+.slider {
+  width: 200px;
+  height: 6px;
+  border-radius: 3px;
+  background: #e5e5e7;
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+  margin-right: 12px;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #667eea;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #667eea;
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease;
+}
+
+.slider::-moz-range-thumb:hover {
+  transform: scale(1.2);
+}
+
+/* 颜色选择器样式 */
+.color-input {
+  width: 60px;
+  height: 36px;
+  border: 1px solid #e5e5e7;
+  border-radius: 8px;
+  cursor: pointer;
+  margin-right: 12px;
+  padding: 0;
+  outline: none;
+}
+
+.color-input::-webkit-color-swatch-wrapper {
+  padding: 4px;
+}
+
+.color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+.color-input::-moz-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+/* 数值显示 */
+.value-display {
+  font-size: 14px;
+  font-weight: 500;
+  color: #667eea;
+  min-width: 60px;
+  text-align: right;
+}
+
+/* 图标管理 */
+.icon-management {
+  margin-top: 16px;
+}
+
+.management-description {
+  font-size: 13px;
+  color: #6b7280;
+  margin-bottom: 16px;
+}
+
+.btn-add-icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: 16px;
+}
+
+.btn-add-icon:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-add-icon .icon {
+  font-size: 18px;
+}
+
+/* 图标列表 */
+.icon-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.icon-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #f5f5f7;
+  border-radius: 8px;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+}
+
+.icon-item:hover {
+  background: #ebebed;
+  border-color: #667eea;
+}
+
+.icon-preview {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 4px;
+}
+
+.icon-image {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  
+  /* 优化图像渲染质量 */
+  image-rendering: auto;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+
+.icon-emoji {
+  font-size: 32px;
+  line-height: 1;
+}
+
+.icon-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.icon-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1d1d1f;
+}
+
+.icon-type {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.btn-remove {
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: #ef4444;
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-remove:hover {
+  background: #dc2626;
+  transform: scale(1.05);
+}
+
+.system-label {
+  font-size: 12px;
+  color: #667eea;
+  font-weight: 500;
+  padding: 4px 8px;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 4px;
+}
+
+.btn-remove:active {
+  transform: translateY(0);
 }
 </style>
 

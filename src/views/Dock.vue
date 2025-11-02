@@ -27,12 +27,15 @@
         :key="icon.id"
         class="dock-icon"
         :style="iconStyle"
-        @click="handleIconClick(icon)"
+        @click.left="handleIconClick(icon)"
+        @contextmenu.prevent.stop="handleContextMenu($event, icon)"
         @mouseenter="handleIconHover($event, true)"
         @mouseleave="handleIconHover($event, false)"
       >
         <div class="icon-content">
-          <span class="icon-image">{{ icon.icon }}</span>
+          <!-- 优先显示真实图标，如果没有则显示 emoji -->
+          <img v-if="icon.iconPath" :src="icon.iconPath" class="icon-image-file" :alt="icon.name" />
+          <span v-else class="icon-image">{{ icon.icon }}</span>
         </div>
         <div class="icon-tooltip">{{ icon.name }}</div>
       </div>
@@ -57,7 +60,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
 import { useDockStore } from '@/stores/dockStore';
-import { appWindow } from '@tauri-apps/api/window';
+import { appWindow, LogicalPosition } from '@tauri-apps/api/window';
 import { open } from '@tauri-apps/api/dialog';
 import { invoke } from '@tauri-apps/api/tauri';
 
@@ -176,35 +179,77 @@ async function handleMouseDown(event: MouseEvent) {
   event.preventDefault();
   
   try {
-    console.log('🖱️ [handleMouseDown] 开始拖动 Dock...');
-    console.log('📍 [handleMouseDown] 拖动前的位置:', {
-      x: dockStore.settings.x,
-      y: dockStore.settings.y
-    });
+    console.log('🖱️ 开始拖动 Dock...');
     
-    // 调用 Tauri 的拖动 API（这是一个阻塞调用）
+    // 记录拖动开始前的位置
+    const startPosition = await appWindow.outerPosition();
+    console.log('📍 拖动前位置（物理坐标）:', startPosition);
+    
+    // 调用 Tauri 的拖动 API（这是一个阻塞调用，会等到拖动结束）
     await appWindow.startDragging();
     
-    // 拖动结束后，保存新位置
-    console.log('✅ [handleMouseDown] 拖动结束，获取新位置...');
-    const position = await appWindow.outerPosition();
-    console.log('📍 [handleMouseDown] 窗口新位置:', {
-      x: position.x,
-      y: position.y
+    console.log('✅ 拖动结束，等待位置稳定...');
+    
+    // 🔑 关键修复：等待更长时间让窗口位置完全稳定
+    // Windows 的窗口拖动可能有过渡动画
+    await new Promise(resolve => setTimeout(resolve, 150));
+    
+    // 多次获取位置，确保位置已经稳定
+    let stablePosition = await appWindow.outerPosition();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    let currentPosition = await appWindow.outerPosition();
+    
+    // 如果位置还在变化，继续等待
+    let retries = 0;
+    while (
+      (stablePosition.x !== currentPosition.x || stablePosition.y !== currentPosition.y) && 
+      retries < 5
+    ) {
+      console.log('⏳ 位置仍在变化，继续等待...');
+      await new Promise(resolve => setTimeout(resolve, 50));
+      stablePosition = currentPosition;
+      currentPosition = await appWindow.outerPosition();
+      retries++;
+    }
+    
+    console.log('✅ 位置已稳定，开始保存...');
+    
+    // 获取最终稳定的位置
+    const physicalPosition = currentPosition;
+    const scaleFactor = await appWindow.scaleFactor();
+    
+    console.log('📍 拖动后位置（物理坐标）:', physicalPosition);
+    console.log('🔍 DPI 缩放因子:', scaleFactor);
+    
+    // 转换为逻辑坐标（独立于 DPI）
+    const logicalX = Math.round(physicalPosition.x / scaleFactor);
+    const logicalY = Math.round(physicalPosition.y / scaleFactor);
+    
+    console.log('📍 拖动后位置（逻辑坐标）:', { x: logicalX, y: logicalY });
+    
+    // 对比拖动前后的位置变化
+    const startLogicalX = Math.round(startPosition.x / scaleFactor);
+    const startLogicalY = Math.round(startPosition.y / scaleFactor);
+    const deltaX = logicalX - startLogicalX;
+    const deltaY = logicalY - startLogicalY;
+    
+    console.log('📊 拖动距离:', {
+      x: deltaX + 'px',
+      y: deltaY + 'px',
+      总距离: Math.round(Math.sqrt(deltaX * deltaX + deltaY * deltaY)) + 'px'
     });
     
-    // 保存位置
-    console.log('💾 [handleMouseDown] 调用 savePosition...');
-    await dockStore.savePosition(position.x, position.y);
-    console.log('✅ [handleMouseDown] savePosition 调用完成');
-    
-    // 最终验证
-    console.log('📍 [handleMouseDown] 保存后 store 中的位置:', {
-      x: dockStore.settings.x,
-      y: dockStore.settings.y
-    });
+    // 只有当位置真正改变时才保存（避免无意义的保存）
+    if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
+      // 保存逻辑坐标
+      await dockStore.savePosition(logicalX, logicalY);
+      console.log('💾 位置已保存（逻辑坐标）:', logicalX, logicalY);
+      console.log('💡 说明: 逻辑坐标会自动适应 DPI 缩放 (当前 ' + Math.round(scaleFactor * 100) + '%)');
+    } else {
+      console.log('ℹ️ 位置变化很小（< 2px），跳过保存');
+    }
   } catch (error) {
-    console.error('❌ [handleMouseDown] 拖动失败:', error);
+    console.error('❌ 拖动失败:', error);
   }
 }
 
@@ -230,32 +275,72 @@ function handleMouseLeave() {
  * 处理图标点击
  */
 async function handleIconClick(icon: any) {
-  console.log('点击图标:', icon.name);
+  console.log('🖱️ 点击图标:', icon.name, icon);
   
   try {
     if (icon.id === 'settings') {
       // 打开设置窗口
+      console.log('📱 打开设置窗口...');
       const { WebviewWindow } = await import('@tauri-apps/api/window');
       const mainWindow = WebviewWindow.getByLabel('main');
       if (mainWindow) {
         await mainWindow.show();
         await mainWindow.setFocus();
+        console.log('✅ 设置窗口已打开');
       }
     } else if (icon.id === 'pc') {
-      // 打开此电脑
-      const { Command } = await import('@tauri-apps/api/shell');
-      await Command.create('explorer').execute();
+      // 打开此电脑 - 使用 shell.open API
+      console.log('💻 打开此电脑...');
+      const { open } = await import('@tauri-apps/api/shell');
+      await open('explorer.exe');
+      console.log('✅ 已打开此电脑');
     } else if (icon.id === 'control-panel') {
-      // 打开控制面板
-      const { Command } = await import('@tauri-apps/api/shell');
-      await Command.create('control').execute();
+      // 打开控制面板 - 使用 shell.open API
+      console.log('⚙️ 打开控制面板...');
+      const { open } = await import('@tauri-apps/api/shell');
+      await open('control.exe');
+      console.log('✅ 已打开控制面板');
     } else if (icon.path) {
-      // 打开自定义应用
-      const { Command } = await import('@tauri-apps/api/shell');
-      await Command.create(icon.path).execute();
+      // 打开自定义应用 - 使用 shell.open API
+      console.log('🚀 启动应用...');
+      console.log('   路径:', icon.path);
+      console.log('   名称:', icon.name);
+      
+      const { open } = await import('@tauri-apps/api/shell');
+      
+      try {
+        // 使用 shell.open 打开应用（会使用系统默认方式打开）
+        await open(icon.path);
+        console.log('✅ 应用已启动');
+      } catch (openError) {
+        console.warn('⚠️ shell.open 失败，尝试使用 Command...');
+        console.error('   错误:', openError);
+        
+        // fallback: 尝试使用 cmd /c start
+        const { Command } = await import('@tauri-apps/api/shell');
+        try {
+          // 注意：使用 new Command() 而不是 Command.create()
+          const command = new Command('cmd', [
+            '/c', 
+            'start', 
+            '', 
+            icon.path
+          ]);
+          const result = await command.execute();
+          
+          console.log('✅ 通过 cmd 启动成功', result);
+        } catch (cmdError) {
+          console.error('❌ cmd 启动也失败:', cmdError);
+          throw cmdError;
+        }
+      }
     }
   } catch (error) {
-    console.error('打开应用失败:', error);
+    console.error('❌ 打开应用失败:', error);
+    console.error('   图标信息:', icon);
+    
+    // 显示错误提示
+    alert(`打开 "${icon.name}" 失败！\n\n错误详情:\n${error}\n\n请检查应用路径是否正确。`);
   }
 }
 
@@ -290,46 +375,84 @@ function handleIconHover(event: MouseEvent, isEnter: boolean) {
  */
 async function handleAddIcon() {
   try {
+    console.log('📁 打开文件选择对话框...');
+    
     // 打开文件选择对话框
     const selected = await open({
       multiple: false,
       directory: false,
       filters: [
         { name: '应用程序', extensions: ['exe'] },
+        { name: '快捷方式', extensions: ['lnk'] },
         { name: '所有文件', extensions: ['*'] }
       ],
     });
     
     if (selected && typeof selected === 'string') {
+      console.log('✅ 选择的文件:', selected);
+      
       // 提取文件名作为图标名称
-      const fileName = selected.split('\\').pop()?.replace('.exe', '') || 'App';
+      const fileName = selected.split('\\').pop()?.replace(/\.(exe|lnk)$/i, '') || 'App';
+      
+      console.log('🔍 正在提取应用图标...');
+      
+      // 尝试获取应用的真实图标
+      let iconPath = '';
+      let iconData = '';
+      
+      try {
+        // 调用 Tauri 后端获取图标
+        const result = await invoke<{ success: boolean; icon?: string; error?: string }>(
+          'extract_icon',
+          { exePath: selected }
+        );
+        
+        if (result.success && result.icon) {
+          iconData = result.icon;
+          iconPath = `data:image/png;base64,${iconData}`;
+          console.log('✅ 成功获取应用图标');
+        } else {
+          console.warn('⚠️ 获取图标失败:', result.error);
+          console.log('💡 将使用默认图标');
+        }
+      } catch (error) {
+        console.warn('⚠️ 提取图标失败，使用默认图标:', error);
+      }
       
       // 添加新图标
       dockStore.addIcon({
         id: `app-${Date.now()}`,
         name: fileName,
-        icon: '📦', // 默认图标
+        icon: '📦', // emoji 作为后备
+        iconPath: iconPath || undefined, // 如果有真实图标就使用
         path: selected,
         type: 'app',
       });
+      
+      console.log('✅ 图标已添加到 Dock:', fileName);
+      if (iconPath) {
+        console.log('✨ 使用真实应用图标');
+      } else {
+        console.log('📦 使用默认图标');
+      }
     }
   } catch (error) {
-    console.error('添加图标失败:', error);
+    console.error('❌ 添加图标失败:', error);
   }
 }
 
 // ==================== 右键菜单（移除图标） ====================
 
 /**
- * 显示右键菜单
+ * 处理右键菜单（移除图标）
+ * 注意：event.preventDefault() 和 event.stopPropagation() 
+ * 已在模板中通过 .prevent.stop 修饰符处理
  */
 function handleContextMenu(event: MouseEvent, icon: any) {
-  event.preventDefault();
-  
-  // 简单实现：直接移除
-  if (confirm(`确定要移除 "${icon.name}" 吗？`)) {
-    dockStore.removeIcon(icon.id);
-  }
+  // 直接移除，无需确认
+  console.log('🗑️ 右键移除图标:', icon.name);
+  dockStore.removeIcon(icon.id);
+  console.log('✅ 图标已移除');
 }
 
 // ==================== Storage 同步 ====================
@@ -363,16 +486,6 @@ function handleStorageChange(e: StorageEvent) {
 
 onMounted(() => {
   console.log('Dock 组件已挂载');
-  
-  // 添加右键菜单支持
-  if (dockContainer.value) {
-    const icons = dockContainer.value.querySelectorAll('.dock-icon:not(.add-icon)');
-    icons.forEach((iconEl, index) => {
-      iconEl.addEventListener('contextmenu', (e) => {
-        handleContextMenu(e as MouseEvent, dockStore.icons[index]);
-      });
-    });
-  }
   
   // 监听 localStorage 变化（从其他窗口）
   window.addEventListener('storage', handleStorageChange);
