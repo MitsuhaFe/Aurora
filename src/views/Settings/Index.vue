@@ -339,17 +339,379 @@
             </div>
           </div>
           
+          <!-- 动画与效果 -->
+          <div class="setting-section-title">动画与效果</div>
+          
           <div class="setting-item">
             <div class="setting-label">
-              <h3>悬浮动画</h3>
-              <p>鼠标悬浮时的图标动画效果</p>
+              <h3>悬浮放大</h3>
+              <p>鼠标悬浮时图标放大效果</p>
             </div>
             <div class="setting-control">
-              <select v-model="dockStore.settings.hoverAnimation" class="select-input">
-                <option value="none">无动画</option>
-                <option value="scale">缩放</option>
-                <option value="glow">发光</option>
-                <option value="both">缩放 + 发光</option>
+              <input 
+                type="checkbox" 
+                id="icon-hover-scale" 
+                v-model="dockStore.settings.animations.iconHoverScale"
+              />
+              <label for="icon-hover-scale" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>悬浮发光</h3>
+              <p>鼠标悬浮时图标发光效果</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-hover-glow" 
+                v-model="dockStore.settings.animations.iconHoverGlow"
+              />
+              <label for="icon-hover-glow" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>点击涟漪</h3>
+              <p>点击图标时产生涟漪扩散效果</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-click-ripple" 
+                v-model="dockStore.settings.animations.iconClickRipple"
+              />
+              <label for="icon-click-ripple" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>图标弹跳</h3>
+              <p>添加图标时的弹跳进场动画</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-bounce" 
+                v-model="dockStore.settings.animations.iconBounce"
+              />
+              <label for="icon-bounce" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>悬浮旋转</h3>
+              <p>鼠标悬浮时图标轻微旋转效果</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-rotate" 
+                v-model="dockStore.settings.animations.iconRotate"
+              />
+              <label for="icon-rotate" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>3D 效果</h3>
+              <p>启用图标 3D 透视变换效果</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-3d-effect" 
+                v-model="dockStore.settings.animations.icon3DEffect"
+              />
+              <label for="icon-3d-effect" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>平滑过渡</h3>
+              <p>所有属性变化使用平滑过渡动画</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="smooth-transition" 
+                v-model="dockStore.settings.animations.smoothTransition"
+              />
+              <label for="smooth-transition" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>Dock 滑入/滑出</h3>
+              <p>Dock 栏显示/隐藏时的滑动动画</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="dock-slide" 
+                v-model="dockStore.settings.animations.dockSlide"
+              />
+              <label for="dock-slide" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>悬浮浮动</h3>
+              <p>鼠标悬浮时图标上下浮动</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-hover-float" 
+                v-model="dockStore.settings.animations.iconHoverFloat"
+              />
+              <label for="icon-hover-float" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>悬浮摇晃</h3>
+              <p>鼠标悬浮时图标轻微摇晃</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-hover-shake" 
+                v-model="dockStore.settings.animations.iconHoverShake"
+              />
+              <label for="icon-hover-shake" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>悬浮脉冲</h3>
+              <p>鼠标悬浮时图标脉冲缩放</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-hover-pulse" 
+                v-model="dockStore.settings.animations.iconHoverPulse"
+              />
+              <label for="icon-hover-pulse" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>点击弹性</h3>
+              <p>点击图标时产生弹性缩放效果</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-click-bounce" 
+                v-model="dockStore.settings.animations.iconClickBounce"
+              />
+              <label for="icon-click-bounce" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>光泽闪过</h3>
+              <p>图标表面定期闪过光泽效果</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-shine" 
+                v-model="dockStore.settings.animations.iconShine"
+              />
+              <label for="icon-shine" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>悬浮倾斜</h3>
+              <p>鼠标悬浮时图标轻微倾斜</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-hover-tilt" 
+                v-model="dockStore.settings.animations.iconHoverTilt"
+              />
+              <label for="icon-hover-tilt" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>彩虹边框</h3>
+              <p>图标边框循环显示彩虹色</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-rainbow-border" 
+                v-model="dockStore.settings.animations.iconRainbowBorder"
+              />
+              <label for="icon-rainbow-border" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>波浪效果</h3>
+              <p>图标产生波浪起伏效果</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-wave" 
+                v-model="dockStore.settings.animations.iconWave"
+              />
+              <label for="icon-wave" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>悬浮翻转</h3>
+              <p>鼠标悬浮时图标翻转180度</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-flip" 
+                v-model="dockStore.settings.animations.iconFlip"
+              />
+              <label for="icon-flip" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>心跳效果</h3>
+              <p>图标产生心跳般的缩放效果</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-heartbeat" 
+                v-model="dockStore.settings.animations.iconHeartbeat"
+              />
+              <label for="icon-heartbeat" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>摆动效果</h3>
+              <p>鼠标悬浮时图标像钟摆一样摆动</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-swing" 
+                v-model="dockStore.settings.animations.iconSwing"
+              />
+              <label for="icon-swing" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>橡皮筋效果</h3>
+              <p>鼠标悬浮时图标产生橡皮筋拉伸效果</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-rubber-band" 
+                v-model="dockStore.settings.animations.iconRubberBand"
+              />
+              <label for="icon-rubber-band" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>果冻效果</h3>
+              <p>鼠标悬浮时图标产生果冻摇晃效果</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-jello" 
+                v-model="dockStore.settings.animations.iconJello"
+              />
+              <label for="icon-jello" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>摇摆效果</h3>
+              <p>鼠标悬浮时图标左右摇摆</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-wobble" 
+                v-model="dockStore.settings.animations.iconWobble"
+              />
+              <label for="icon-wobble" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>闪光效果</h3>
+              <p>图标定期闪烁发光</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-flash" 
+                v-model="dockStore.settings.animations.iconFlash"
+              />
+              <label for="icon-flash" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>360度旋转</h3>
+              <p>鼠标悬浮时图标旋转一圈</p>
+            </div>
+            <div class="setting-control">
+              <input 
+                type="checkbox" 
+                id="icon-rotate-360" 
+                v-model="dockStore.settings.animations.iconRotate360"
+              />
+              <label for="icon-rotate-360" class="toggle"></label>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-label">
+              <h3>动画速度</h3>
+              <p>全局动画播放速度</p>
+            </div>
+            <div class="setting-control">
+              <select v-model="dockStore.settings.animationSpeed" class="select-input">
+                <option value="slow">慢速 (0.5s)</option>
+                <option value="normal">正常 (0.3s)</option>
+                <option value="fast">快速 (0.15s)</option>
               </select>
             </div>
           </div>

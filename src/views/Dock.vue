@@ -12,7 +12,10 @@
     class="dock-container"
     :class="{ 
       'is-pinned': dockStore.settings.pinPosition,
-      'is-auto-hidden': dockStore.isAutoHidden && dockStore.settings.autoHide
+      'is-auto-hidden': dockStore.isAutoHidden && dockStore.settings.autoHide,
+      'has-slide-animation': dockStore.settings.animations.dockSlide,
+      'has-smooth-transition': dockStore.settings.animations.smoothTransition,
+      [`speed-${dockStore.settings.animationSpeed}`]: true
     }"
     :style="dockContainerStyle"
     :title="dockStore.settings.pinPosition ? 'Dock 位置已固定' : '拖动以移动 Dock'"
@@ -26,11 +29,32 @@
         v-for="icon in dockStore.icons"
         :key="icon.id"
         class="dock-icon"
+        :class="{
+          'has-hover-scale': dockStore.settings.animations.iconHoverScale,
+          'has-hover-glow': dockStore.settings.animations.iconHoverGlow,
+          'has-rotate': dockStore.settings.animations.iconRotate,
+          'has-3d-effect': dockStore.settings.animations.icon3DEffect,
+          'has-bounce': dockStore.settings.animations.iconBounce,
+          'has-hover-float': dockStore.settings.animations.iconHoverFloat,
+          'has-hover-shake': dockStore.settings.animations.iconHoverShake,
+          'has-hover-pulse': dockStore.settings.animations.iconHoverPulse,
+          'has-click-bounce': dockStore.settings.animations.iconClickBounce,
+          'has-shine': dockStore.settings.animations.iconShine,
+          'has-hover-tilt': dockStore.settings.animations.iconHoverTilt,
+          'has-rainbow-border': dockStore.settings.animations.iconRainbowBorder,
+          'has-wave': dockStore.settings.animations.iconWave,
+          'has-flip': dockStore.settings.animations.iconFlip,
+          'has-heartbeat': dockStore.settings.animations.iconHeartbeat,
+          'has-swing': dockStore.settings.animations.iconSwing,
+          'has-rubber-band': dockStore.settings.animations.iconRubberBand,
+          'has-jello': dockStore.settings.animations.iconJello,
+          'has-wobble': dockStore.settings.animations.iconWobble,
+          'has-flash': dockStore.settings.animations.iconFlash,
+          'has-rotate-360': dockStore.settings.animations.iconRotate360
+        }"
         :style="iconStyle"
         @click.left="handleIconClick($event, icon)"
         @contextmenu.prevent.stop="handleContextMenu($event, icon)"
-        @mouseenter="handleIconHover($event, true)"
-        @mouseleave="handleIconHover($event, false)"
       >
         <div class="icon-content">
           <!-- 优先显示真实图标，如果没有则显示 emoji -->
@@ -43,10 +67,30 @@
       <!-- 添加图标按钮 -->
       <div
         class="dock-icon add-icon"
+        :class="{
+          'has-hover-scale': dockStore.settings.animations.iconHoverScale,
+          'has-hover-glow': dockStore.settings.animations.iconHoverGlow,
+          'has-rotate': dockStore.settings.animations.iconRotate,
+          'has-3d-effect': dockStore.settings.animations.icon3DEffect,
+          'has-hover-float': dockStore.settings.animations.iconHoverFloat,
+          'has-hover-shake': dockStore.settings.animations.iconHoverShake,
+          'has-hover-pulse': dockStore.settings.animations.iconHoverPulse,
+          'has-click-bounce': dockStore.settings.animations.iconClickBounce,
+          'has-shine': dockStore.settings.animations.iconShine,
+          'has-hover-tilt': dockStore.settings.animations.iconHoverTilt,
+          'has-rainbow-border': dockStore.settings.animations.iconRainbowBorder,
+          'has-wave': dockStore.settings.animations.iconWave,
+          'has-flip': dockStore.settings.animations.iconFlip,
+          'has-heartbeat': dockStore.settings.animations.iconHeartbeat,
+          'has-swing': dockStore.settings.animations.iconSwing,
+          'has-rubber-band': dockStore.settings.animations.iconRubberBand,
+          'has-jello': dockStore.settings.animations.iconJello,
+          'has-wobble': dockStore.settings.animations.iconWobble,
+          'has-flash': dockStore.settings.animations.iconFlash,
+          'has-rotate-360': dockStore.settings.animations.iconRotate360
+        }"
         :style="iconStyle"
-        @click="handleAddIconClick"
-        @mouseenter="handleIconHover($event, true)"
-        @mouseleave="handleIconHover($event, false)"
+        @click="handleAddIcon"
       >
         <div class="icon-content">
           <span class="icon-image">➕</span>
@@ -275,6 +319,8 @@ function handleMouseLeave() {
  * 创建涟漪效果
  */
 function createRipple(event: MouseEvent) {
+  if (!dockStore.settings.animations.iconClickRipple) return;
+  
   const target = event.currentTarget as HTMLElement;
   const iconContent = target.querySelector('.icon-content') as HTMLElement;
   
@@ -300,13 +346,13 @@ function createRipple(event: MouseEvent) {
   // 动画结束后移除涟漪
   setTimeout(() => {
     ripple.remove();
-  }, 600);
+  }, 800);
 }
 
 /**
  * 处理图标点击
  */
-async function handleIconClick(event: any, icon: any) {
+async function handleIconClick(event: MouseEvent, icon: any) {
   console.log('🖱️ 点击图标:', icon.name, icon);
   
   // 创建涟漪效果
@@ -377,43 +423,6 @@ async function handleIconClick(event: any, icon: any) {
     // 显示错误提示
     alert(`打开 "${icon.name}" 失败！\n\n错误详情:\n${error}\n\n请检查应用路径是否正确。`);
   }
-}
-
-/**
- * 处理图标悬浮
- */
-function handleIconHover(event: MouseEvent, isEnter: boolean) {
-  const target = event.currentTarget as HTMLElement;
-  const iconContent = target.querySelector('.icon-content') as HTMLElement;
-  
-  if (!iconContent) return;
-  
-  const animation = dockStore.settings.hoverAnimation;
-  
-  if (isEnter) {
-    // 应用悬浮动画
-    if (animation === 'scale' || animation === 'both') {
-      iconContent.style.transform = 'scale(1.2)';
-    }
-    if (animation === 'glow' || animation === 'both') {
-      iconContent.style.filter = 'drop-shadow(0 0 8px rgba(102, 126, 234, 0.6))';
-    }
-  } else {
-    // 移除悬浮动画
-    iconContent.style.transform = 'scale(1)';
-    iconContent.style.filter = 'none';
-  }
-}
-
-/**
- * 处理添加图标按钮点击（带涟漪效果）
- */
-function handleAddIconClick(event: MouseEvent) {
-  // 创建涟漪效果
-  createRipple(event);
-  
-  // 调用实际的添加图标逻辑
-  handleAddIcon();
 }
 
 /**

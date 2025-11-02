@@ -172,24 +172,6 @@
   -webkit-transform: translateZ(0);
 }
 
-/* ==================== 悬浮动画样式 ==================== */
-
-/* 缩放动画 - 由 JS 动态控制 */
-.icon-content[data-animation="scale"] {
-  transform: scale(1.2);
-}
-
-/* 发光动画 - 由 JS 动态控制 */
-.icon-content[data-animation="glow"] {
-  filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
-}
-
-/* 组合动画 - 由 JS 动态控制 */
-.icon-content[data-animation="both"] {
-  transform: scale(1.2);
-  filter: drop-shadow(0 0 8px rgba(102, 126, 234, 0.6));
-}
-
 /* ==================== 自动隐藏触发区域 ==================== */
 
 /* 触发区域：不可见，位于窗口顶部（Dock 隐藏前的位置） */
@@ -322,4 +304,599 @@
 .dock-icon:nth-child(6) { animation-delay: 0.3s; }
 .dock-icon:nth-child(7) { animation-delay: 0.35s; }
 .dock-icon:nth-child(8) { animation-delay: 0.4s; }
+
+/* ==================== 新增动画效果 ==================== */
+
+/* === 动画速度配置 === */
+.dock-container.speed-slow * {
+  transition-duration: 0.5s !important;
+}
+
+.dock-container.speed-normal * {
+  transition-duration: 0.3s !important;
+}
+
+.dock-container.speed-fast * {
+  transition-duration: 0.15s !important;
+}
+
+/* === 平滑过渡 === */
+.dock-container.has-smooth-transition * {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* === Dock 滑入/滑出动画 === */
+@keyframes slideIn {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.dock-container.has-slide-animation {
+  animation: slideIn 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* === 悬浮放大效果 === */
+.dock-icon.has-hover-scale:hover {
+  transform: scale(1.15) !important;
+}
+
+/* === 悬浮发光效果 === */
+.dock-icon.has-hover-glow:hover .icon-content {
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.8),
+              0 0 40px rgba(102, 126, 234, 0.4),
+              0 0 60px rgba(102, 126, 234, 0.2);
+  filter: brightness(1.2);
+}
+
+/* === 点击涟漪效果 === */
+.icon-content {
+  position: relative;
+  overflow: hidden;
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(102, 126, 234, 0.8) 0%, rgba(102, 126, 234, 0.4) 50%, rgba(102, 126, 234, 0) 100%);
+  transform: scale(0);
+  animation: ripple-animation 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+  opacity: 1;
+}
+
+@keyframes ripple-animation {
+  0% {
+    transform: scale(0);
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(6);
+    opacity: 0;
+  }
+}
+
+/* === 图标弹跳效果 === */
+@keyframes bounce {
+  0% {
+    transform: scale(0) translateY(0);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.2) translateY(-10px);
+  }
+  70% {
+    transform: scale(0.9) translateY(0);
+  }
+  85% {
+    transform: scale(1.05) translateY(-5px);
+  }
+  100% {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.dock-icon.has-bounce {
+  animation: bounce 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+/* === 悬浮旋转效果 === */
+.dock-icon.has-rotate:hover {
+  animation: rotate 0.6s ease-in-out;
+}
+
+@keyframes rotate {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  25% {
+    transform: rotate(-10deg);
+  }
+  75% {
+    transform: rotate(10deg);
+  }
+}
+
+/* === 3D 效果 === */
+.dock-icon.has-3d-effect {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+}
+
+.dock-icon.has-3d-effect:hover {
+  transform: rotateY(15deg) rotateX(10deg) scale(1.1);
+  transition: transform 0.3s ease;
+}
+
+.dock-icon.has-3d-effect .icon-content {
+  transform-style: preserve-3d;
+  transition: transform 0.3s ease;
+}
+
+.dock-icon.has-3d-effect:hover .icon-content {
+  transform: translateZ(20px);
+}
+
+/* === 组合动画优化 === */
+/* 悬浮放大 + 发光 */
+.dock-icon.has-hover-scale.has-hover-glow:hover {
+  transform: scale(1.15) !important;
+}
+
+.dock-icon.has-hover-scale.has-hover-glow:hover .icon-content {
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.8),
+              0 0 40px rgba(102, 126, 234, 0.4),
+              0 0 60px rgba(102, 126, 234, 0.2);
+  filter: brightness(1.2);
+}
+
+/* 悬浮放大 + 旋转 */
+.dock-icon.has-hover-scale.has-rotate:hover {
+  transform: scale(1.15) !important;
+  animation: rotate 0.6s ease-in-out;
+}
+
+/* 3D 效果 + 悬浮放大 */
+.dock-icon.has-3d-effect.has-hover-scale:hover {
+  transform: rotateY(15deg) rotateX(10deg) scale(1.2);
+}
+
+/* === 添加图标按钮的特殊动画 === */
+.dock-icon.add-icon.has-hover-glow:hover .icon-content {
+  box-shadow: 0 0 20px rgba(102, 126, 234, 1),
+              0 0 40px rgba(102, 126, 234, 0.6),
+              0 0 60px rgba(102, 126, 234, 0.3);
+  filter: brightness(1.3);
+}
+
+/* === 脉冲动画（用于吸引注意） === */
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 0.8;
+  }
+}
+
+/* === 闪烁动画（可选） === */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+/* === 渐变发光边框（可选） === */
+@keyframes glow-border {
+  0%, 100% {
+    border-color: rgba(102, 126, 234, 0.4);
+    box-shadow: 0 0 5px rgba(102, 126, 234, 0.2);
+  }
+  50% {
+    border-color: rgba(102, 126, 234, 0.8);
+    box-shadow: 0 0 20px rgba(102, 126, 234, 0.6);
+  }
+}
+
+/* === 图标内容的动画优化 === */
+.icon-content {
+  will-change: transform, box-shadow, filter;
+}
+
+/* === 防止动画冲突 === */
+.dock-icon.has-rotate:hover {
+  animation: rotate 0.6s ease-in-out !important;
+}
+
+.dock-icon.has-3d-effect:not(.has-rotate):hover {
+  animation: none !important;
+}
+
+/* ==================== 新增动画效果 ==================== */
+
+/* === 悬浮浮动效果 === */
+.dock-icon.has-hover-float:hover {
+  animation: float 2s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* === 悬浮摇晃效果 === */
+.dock-icon.has-hover-shake:hover {
+  animation: shake 0.5s ease-in-out infinite;
+}
+
+@keyframes shake {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  10%, 30%, 50%, 70%, 90% {
+    transform: translateX(-3px);
+  }
+  20%, 40%, 60%, 80% {
+    transform: translateX(3px);
+  }
+}
+
+/* === 悬浮脉冲效果 === */
+.dock-icon.has-hover-pulse:hover {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.08);
+    opacity: 0.85;
+  }
+}
+
+/* === 点击弹性效果 === */
+.dock-icon.has-click-bounce:active {
+  animation: click-bounce 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+
+@keyframes click-bounce {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(0.85);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* === 光泽闪过效果 === */
+.dock-icon.has-shine .icon-content::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(
+    45deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.3) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%) translateY(-100%) rotate(45deg);
+  animation: shine 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes shine {
+  0% {
+    transform: translateX(-100%) translateY(-100%) rotate(45deg);
+  }
+  100% {
+    transform: translateX(100%) translateY(100%) rotate(45deg);
+  }
+}
+
+/* === 悬浮倾斜效果 === */
+.dock-icon.has-hover-tilt:hover {
+  transform: perspective(500px) rotateX(5deg) rotateY(5deg);
+  transition: transform 0.3s ease;
+}
+
+/* === 彩虹边框效果 === */
+.dock-icon.has-rainbow-border .icon-content {
+  position: relative;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.dock-icon.has-rainbow-border .icon-content::before {
+  content: '';
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  right: -2px;
+  bottom: -2px;
+  background: linear-gradient(
+    45deg,
+    red, orange, yellow, green, cyan, blue, violet, red
+  );
+  background-size: 400% 400%;
+  border-radius: 14px;
+  z-index: -1;
+  animation: rainbow 3s linear infinite;
+}
+
+@keyframes rainbow {
+  0% {
+    background-position: 0% 50%;
+  }
+  100% {
+    background-position: 100% 50%;
+  }
+}
+
+/* === 波浪效果 === */
+.dock-icon.has-wave:hover {
+  animation: wave 1s ease-in-out infinite;
+}
+
+@keyframes wave {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-5px) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(0) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-5px) rotate(2deg);
+  }
+}
+
+/* === 组合动画优化（新增） === */
+
+/* 悬浮浮动 + 放大 */
+.dock-icon.has-hover-float.has-hover-scale:hover {
+  animation: float 2s ease-in-out infinite;
+  transform: scale(1.15);
+}
+
+/* 悬浮脉冲 + 发光 */
+.dock-icon.has-hover-pulse.has-hover-glow:hover .icon-content {
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.8),
+              0 0 40px rgba(102, 126, 234, 0.4),
+              0 0 60px rgba(102, 126, 234, 0.2);
+}
+
+/* 彩虹边框样式调整 */
+.dock-icon.has-rainbow-border.has-hover-glow:hover .icon-content::before {
+  opacity: 0.8;
+}
+
+/* 波浪 + 倾斜组合 */
+.dock-icon.has-wave.has-hover-tilt:hover {
+  animation: wave 1s ease-in-out infinite;
+}
+
+/* === 性能优化 === */
+.dock-icon.has-shine .icon-content,
+.dock-icon.has-rainbow-border .icon-content {
+  overflow: hidden;
+}
+
+/* ==================== 更多新增动画效果 ==================== */
+
+/* === 悬浮翻转效果 === */
+.dock-icon.has-flip:hover {
+  animation: flip 0.6s ease-in-out;
+}
+
+@keyframes flip {
+  0% {
+    transform: perspective(400px) rotateY(0);
+  }
+  100% {
+    transform: perspective(400px) rotateY(180deg);
+  }
+}
+
+/* === 心跳效果 === */
+.dock-icon.has-heartbeat {
+  animation: heartbeat 1.3s ease-in-out infinite;
+}
+
+@keyframes heartbeat {
+  0%, 14%, 28%, 70% {
+    transform: scale(1);
+  }
+  7%, 21% {
+    transform: scale(1.15);
+  }
+}
+
+/* === 摆动效果 === */
+.dock-icon.has-swing:hover {
+  animation: swing 1s ease-in-out;
+  transform-origin: top center;
+}
+
+@keyframes swing {
+  20% {
+    transform: rotate(15deg);
+  }
+  40% {
+    transform: rotate(-10deg);
+  }
+  60% {
+    transform: rotate(5deg);
+  }
+  80% {
+    transform: rotate(-5deg);
+  }
+  100% {
+    transform: rotate(0deg);
+  }
+}
+
+/* === 橡皮筋效果 === */
+.dock-icon.has-rubber-band:hover {
+  animation: rubberBand 0.8s ease-in-out;
+}
+
+@keyframes rubberBand {
+  0% {
+    transform: scale(1);
+  }
+  30% {
+    transform: scaleX(1.25) scaleY(0.75);
+  }
+  40% {
+    transform: scaleX(0.75) scaleY(1.25);
+  }
+  50% {
+    transform: scaleX(1.15) scaleY(0.85);
+  }
+  65% {
+    transform: scaleX(0.95) scaleY(1.05);
+  }
+  75% {
+    transform: scaleX(1.05) scaleY(0.95);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* === 果冻效果 === */
+.dock-icon.has-jello:hover {
+  animation: jello 0.8s ease-in-out;
+  transform-origin: center;
+}
+
+@keyframes jello {
+  0%, 11.1%, 100% {
+    transform: none;
+  }
+  22.2% {
+    transform: skewX(-12.5deg) skewY(-12.5deg);
+  }
+  33.3% {
+    transform: skewX(6.25deg) skewY(6.25deg);
+  }
+  44.4% {
+    transform: skewX(-3.125deg) skewY(-3.125deg);
+  }
+  55.5% {
+    transform: skewX(1.5625deg) skewY(1.5625deg);
+  }
+  66.6% {
+    transform: skewX(-0.78125deg) skewY(-0.78125deg);
+  }
+  77.7% {
+    transform: skewX(0.390625deg) skewY(0.390625deg);
+  }
+  88.8% {
+    transform: skewX(-0.1953125deg) skewY(-0.1953125deg);
+  }
+}
+
+/* === 摇摆效果 === */
+.dock-icon.has-wobble:hover {
+  animation: wobble 0.8s ease-in-out;
+}
+
+@keyframes wobble {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  15% {
+    transform: translateX(-25%) rotate(-5deg);
+  }
+  30% {
+    transform: translateX(20%) rotate(3deg);
+  }
+  45% {
+    transform: translateX(-15%) rotate(-3deg);
+  }
+  60% {
+    transform: translateX(10%) rotate(2deg);
+  }
+  75% {
+    transform: translateX(-5%) rotate(-1deg);
+  }
+}
+
+/* === 闪光效果 === */
+.dock-icon.has-flash {
+  animation: flash 2s ease-in-out infinite;
+}
+
+@keyframes flash {
+  0%, 50%, 100% {
+    opacity: 1;
+  }
+  25%, 75% {
+    opacity: 0.3;
+  }
+}
+
+/* === 360度旋转效果 === */
+.dock-icon.has-rotate-360:hover {
+  animation: rotate360 0.8s ease-in-out;
+}
+
+@keyframes rotate360 {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* === 新增动画的组合优化 === */
+
+/* 翻转 + 放大 */
+.dock-icon.has-flip.has-hover-scale:hover {
+  animation: flip 0.6s ease-in-out;
+}
+
+/* 心跳 + 发光 */
+.dock-icon.has-heartbeat.has-hover-glow .icon-content {
+  box-shadow: 0 0 20px rgba(102, 126, 234, 0.8),
+              0 0 40px rgba(102, 126, 234, 0.4),
+              0 0 60px rgba(102, 126, 234, 0.2);
+}
+
+/* 闪光 + 彩虹边框 */
+.dock-icon.has-flash.has-rainbow-border {
+  animation: flash 2s ease-in-out infinite;
+}
 

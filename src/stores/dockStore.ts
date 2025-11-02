@@ -44,7 +44,39 @@ export interface DockSettings {
   // 图标属性
   iconSize: number;
   iconOpacity: number;
-  hoverAnimation: 'scale' | 'glow' | 'both' | 'none';
+  
+  // 动画效果配置
+  animations: {
+    iconHoverScale: boolean;      // 悬浮放大
+    iconHoverGlow: boolean;        // 悬浮发光
+    iconClickRipple: boolean;      // 点击涟漪
+    iconBounce: boolean;           // 图标弹跳（添加时）
+    iconRotate: boolean;           // 悬浮旋转
+    smoothTransition: boolean;     // 平滑过渡
+    dockSlide: boolean;            // Dock滑入/滑出
+    icon3DEffect: boolean;         // 3D效果
+    
+    // 更多动画效果
+    iconHoverFloat: boolean;       // 悬浮浮动（上下移动）
+    iconHoverShake: boolean;       // 悬浮摇晃
+    iconHoverPulse: boolean;       // 悬浮脉冲
+    iconClickBounce: boolean;      // 点击弹性
+    iconShine: boolean;            // 光泽闪过
+    iconHoverTilt: boolean;        // 悬浮倾斜
+    iconRainbowBorder: boolean;    // 彩虹边框
+    iconWave: boolean;             // 波浪效果
+    iconFlip: boolean;             // 悬浮翻转
+    iconHeartbeat: boolean;        // 心跳效果
+    iconSwing: boolean;            // 摆动效果
+    iconRubberBand: boolean;       // 橡皮筋效果
+    iconJello: boolean;            // 果冻效果
+    iconWobble: boolean;           // 摇摆效果
+    iconFlash: boolean;            // 闪光效果
+    iconRotate360: boolean;        // 360度旋转
+  };
+  
+  // 动画速度配置
+  animationSpeed: 'slow' | 'normal' | 'fast';
 }
 
 /**
@@ -82,7 +114,35 @@ export const useDockStore = defineStore('dock', () => {
     hasGlassEffect: true,
     iconSize: 48,
     iconOpacity: 1,
-    hoverAnimation: 'both',
+    animations: {
+      iconHoverScale: true,
+      iconHoverGlow: true,
+      iconClickRipple: true,
+      iconBounce: true,
+      iconRotate: false,
+      smoothTransition: true,
+      dockSlide: true,
+      icon3DEffect: false,
+      
+      // 更多动画默认值
+      iconHoverFloat: false,
+      iconHoverShake: false,
+      iconHoverPulse: false,
+      iconClickBounce: true,
+      iconShine: false,
+      iconHoverTilt: false,
+      iconRainbowBorder: false,
+      iconWave: false,
+      iconFlip: false,
+      iconHeartbeat: false,
+      iconSwing: false,
+      iconRubberBand: false,
+      iconJello: false,
+      iconWobble: false,
+      iconFlash: false,
+      iconRotate360: false,
+    },
+    animationSpeed: 'normal',
   });
   
   // 自动隐藏相关状态
