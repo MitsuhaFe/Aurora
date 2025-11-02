@@ -27,7 +27,7 @@
         :key="icon.id"
         class="dock-icon"
         :style="iconStyle"
-        @click.left="handleIconClick(icon)"
+        @click.left="handleIconClick($event, icon)"
         @contextmenu.prevent.stop="handleContextMenu($event, icon)"
         @mouseenter="handleIconHover($event, true)"
         @mouseleave="handleIconHover($event, false)"
@@ -44,7 +44,7 @@
       <div
         class="dock-icon add-icon"
         :style="iconStyle"
-        @click="handleAddIcon"
+        @click="handleAddIconClick"
         @mouseenter="handleIconHover($event, true)"
         @mouseleave="handleIconHover($event, false)"
       >
@@ -272,10 +272,45 @@ function handleMouseLeave() {
 // ==================== 图标交互 ====================
 
 /**
+ * 创建涟漪效果
+ */
+function createRipple(event: MouseEvent) {
+  const target = event.currentTarget as HTMLElement;
+  const iconContent = target.querySelector('.icon-content') as HTMLElement;
+  
+  if (!iconContent) return;
+  
+  // 创建涟漪元素
+  const ripple = document.createElement('span');
+  ripple.classList.add('ripple');
+  
+  // 计算涟漪位置（相对于图标）
+  const rect = iconContent.getBoundingClientRect();
+  const size = Math.max(rect.width, rect.height);
+  const x = event.clientX - rect.left - size / 2;
+  const y = event.clientY - rect.top - size / 2;
+  
+  ripple.style.width = ripple.style.height = `${size}px`;
+  ripple.style.left = `${x}px`;
+  ripple.style.top = `${y}px`;
+  
+  // 添加涟漪到图标
+  iconContent.appendChild(ripple);
+  
+  // 动画结束后移除涟漪
+  setTimeout(() => {
+    ripple.remove();
+  }, 600);
+}
+
+/**
  * 处理图标点击
  */
-async function handleIconClick(icon: any) {
+async function handleIconClick(event: any, icon: any) {
   console.log('🖱️ 点击图标:', icon.name, icon);
+  
+  // 创建涟漪效果
+  createRipple(event);
   
   try {
     if (icon.id === 'settings') {
@@ -368,6 +403,17 @@ function handleIconHover(event: MouseEvent, isEnter: boolean) {
     iconContent.style.transform = 'scale(1)';
     iconContent.style.filter = 'none';
   }
+}
+
+/**
+ * 处理添加图标按钮点击（带涟漪效果）
+ */
+function handleAddIconClick(event: MouseEvent) {
+  // 创建涟漪效果
+  createRipple(event);
+  
+  // 调用实际的添加图标逻辑
+  handleAddIcon();
 }
 
 /**
