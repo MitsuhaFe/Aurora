@@ -16,14 +16,19 @@ onMounted(async () => {
   console.log('Aurora 应用已启动');
   
   // 仅在主窗口初始化 Dock
-  const windowLabel = await appWindow.label();
+  const windowLabel = appWindow.label;
+  console.log('当前窗口标签:', windowLabel);
+  
   if (windowLabel === 'main') {
     try {
+      console.log('主窗口检测成功，开始初始化 Dock');
       await dockStore.initialize();
-      console.log('Dock 初始化成功');
+      console.log('✅ Dock 初始化成功');
     } catch (error) {
-      console.error('Dock 初始化失败:', error);
+      console.error('❌ Dock 初始化失败:', error);
     }
+  } else {
+    console.log('⏭️ 非主窗口，跳过 Dock 初始化');
   }
 });
 </script>

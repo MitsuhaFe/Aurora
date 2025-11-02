@@ -1011,10 +1011,26 @@ function handleStorageChange(e: StorageEvent) {
 
 // ==================== 生命周期 ====================
 
-onMounted(() => {
+onMounted(async () => {
   // 监听 localStorage 变化（从其他窗口）
   window.addEventListener('storage', handleStorageChange);
   console.log('✅ 设置页面已挂载，开始监听跨窗口数据同步');
+  
+  // 检查 Dock 状态同步问题
+  // 如果 enabled 是 true 但没有初始化，说明应用启动时初始化失败了
+  if (dockStore.settings.enabled && !dockStore.isInitialized) {
+    console.warn('⚠️ 检测到状态不同步：Dock 已启用但未初始化');
+    console.log('🔄 尝试重新初始化 Dock...');
+    try {
+      await dockStore.initialize();
+      console.log('✅ Dock 重新初始化成功');
+    } catch (error) {
+      console.error('❌ Dock 重新初始化失败:', error);
+      // 如果初始化失败，将开关状态设置为 false，保持一致
+      dockStore.settings.enabled = false;
+      console.log('🔄 已将 Dock 开关设置为关闭状态');
+    }
+  }
 });
 
 onUnmounted(() => {

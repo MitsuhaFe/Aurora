@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
-import { WebviewWindow, LogicalSize, LogicalPosition } from '@tauri-apps/api/window';
+import { WebviewWindow, LogicalSize } from '@tauri-apps/api/window';
 
 /**
  * Dock 图标接口
@@ -88,6 +88,9 @@ export const useDockStore = defineStore('dock', () => {
   
   // Dock 窗口实例
   const dockWindow = ref<WebviewWindow | null>(null);
+  
+  // 初始化状态标志
+  const isInitialized = ref(false);
   
   // Dock 图标列表
   const icons = ref<DockIcon[]>([
@@ -641,11 +644,30 @@ export const useDockStore = defineStore('dock', () => {
    * 初始化 Dock
    */
   async function initialize() {
-    loadSettings();
+    if (isInitialized.value) {
+      console.log('⚠️ [initialize] Dock 已经初始化过了，跳过');
+      return;
+    }
+    
+    // 不再重复调用 loadSettings()，因为 store 创建时已经加载过了
+    console.log('🚀 [initialize] 初始化 Dock, enabled =', settings.value.enabled);
     
     // 如果启用了 Dock，创建窗口
     if (settings.value.enabled) {
-      await createDockWindow();
+      console.log('✅ [initialize] Dock 已启用，创建窗口');
+      try {
+        await createDockWindow();
+        isInitialized.value = true;
+        console.log('✅ [initialize] Dock 窗口创建成功');
+      } catch (error) {
+        console.error('❌ [initialize] Dock 窗口创建失败:', error);
+        // 如果窗口创建失败，将 enabled 设置为 false，保持状态一致
+        settings.value.enabled = false;
+        console.log('🔄 [initialize] 已将 enabled 设置为 false，保持状态一致');
+      }
+    } else {
+      console.log('⏭️ [initialize] Dock 未启用，跳过窗口创建');
+      isInitialized.value = true;
     }
   }
   
@@ -706,9 +728,18 @@ export const useDockStore = defineStore('dock', () => {
       settings.value.enabled = enabled;
       
       if (enabled) {
-        await createDockWindow();
+        try {
+          await createDockWindow();
+          isInitialized.value = true;
+        } catch (error) {
+          console.error('❌ [toggleDock] 创建窗口失败:', error);
+          // 如果创建失败，恢复 enabled 状态
+          settings.value.enabled = false;
+          throw error;
+        }
       } else {
         await closeDockWindow();
+        // 关闭窗口时不重置 isInitialized，因为可能会再次启用
       }
       
       console.log('📍 [toggleDock] 切换后的位置:', {
@@ -800,6 +831,7 @@ export const useDockStore = defineStore('dock', () => {
     settings,
     isHovered,
     isAutoHidden,
+    isInitialized,
     
     // 窗口管理
     createDockWindow,
