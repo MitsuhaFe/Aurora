@@ -99,8 +99,11 @@ export const useWidgetStore = defineStore('widget', () => {
   // 标志：是否正在加载设置
   let isLoadingSettings = false;
   
-  // 标志：是否正在保存位置/大小（用于区分位置/大小更新和其他设置更新）
-  let isSavingPositionOrSize = false;
+  // 标志：是否正在保存位置（用于区分位置更新和其他设置更新）
+  const isSavingPositionMap = new Map<string, boolean>();
+  
+  // 标志：是否正在保存大小
+  const isSavingSizeMap = new Map<string, boolean>();
   
   // ==================== 本地存储 ====================
   
@@ -117,10 +120,7 @@ export const useWidgetStore = defineStore('widget', () => {
       if (stored) {
         const parsed = JSON.parse(stored);
         widgets.value = parsed;
-        console.log('📂 从 localStorage 加载小组件设置:', widgets.value.length, '个');
-        widgets.value.forEach(w => {
-          console.log(`  - ${w.type} (${w.id}): 位置(${w.x}, ${w.y}), 大小(${w.width}x${w.height})`);
-        });
+        console.log('📂 从 localStorage 加载小组件设置:', widgets.value);
       } else {
         console.log('📂 localStorage 中没有保存的小组件设置');
       }
@@ -135,59 +135,64 @@ export const useWidgetStore = defineStore('widget', () => {
   
   /**
    * 保存设置到本地存储
-   * 
-   * 关键机制（参考 Dock 实现）：
-   * - 主窗口和小组件窗口有各自的 store 实例
-   * - 小组件窗口拖动/调整大小时会更新并保存位置/大小
-   * - 主窗口修改其他设置时不应覆盖小组件保存的位置/大小
-   * 
-   * 解决方案：
-   * 1. 如果是拖动/调整大小触发的保存（isSavingPositionOrSize = true），使用 store 中的新值
-   * 2. 如果是其他操作触发的保存，保留 localStorage 中的位置/大小
+   * 参考 Dock 的实现，智能处理位置和大小数据，防止覆盖
    */
   function saveSettings() {
     try {
-      // 先读取 localStorage 中已保存的数据
       const stored = localStorage.getItem(STORAGE_KEY);
       let dataToSave = [...widgets.value];
       
-      // 🔑 关键：只有在非位置/大小更新时，才保留 localStorage 中的位置/大小
-      if (!isSavingPositionOrSize && stored) {
+      // 🔑 关键：检查每个小组件，保留 localStorage 中的位置和大小（如果不是正在保存）
+      if (stored) {
         try {
-          const storedWidgets: WidgetSettings[] = JSON.parse(stored);
+          const storedWidgets = JSON.parse(stored) as WidgetSettings[];
           
-          // 为每个小组件检查并保留 localStorage 中的位置/大小
           dataToSave = dataToSave.map(widget => {
-            const storedWidget = storedWidgets.find((w: WidgetSettings) => w.id === widget.id);
+            const storedWidget = storedWidgets.find(w => w.id === widget.id);
+            if (!storedWidget) return widget;
             
-            if (storedWidget) {
-              // 检查位置/大小是否不一致
-              const positionOrSizeChanged = 
+            const isSavingPosition = isSavingPositionMap.get(widget.id);
+            const isSavingSize = isSavingSizeMap.get(widget.id);
+            
+            let updatedWidget = { ...widget };
+            
+            // 如果不是正在保存位置，检查位置是否不一致，保留 localStorage 的位置
+            if (!isSavingPosition) {
+              const positionChanged = 
                 widget.x !== storedWidget.x || 
-                widget.y !== storedWidget.y ||
-                widget.width !== storedWidget.width ||
-                widget.height !== storedWidget.height;
+                widget.y !== storedWidget.y;
               
-              if (positionOrSizeChanged) {
-                console.log(`⚠️ 检测到小组件 ${widget.id} 位置/大小不一致，保留 localStorage 中的值`);
-                // 保留 localStorage 中的位置和大小
-                return {
-                  ...widget,
-                  x: storedWidget.x,
-                  y: storedWidget.y,
-                  width: storedWidget.width,
-                  height: storedWidget.height,
-                };
+              if (positionChanged) {
+                console.log(`⚠️ 小组件 ${widget.id} 位置数据不一致:`);
+                console.log('  - 当前 store:', { x: widget.x, y: widget.y });
+                console.log('  - localStorage:', { x: storedWidget.x, y: storedWidget.y });
+                console.log('  - 保留 localStorage 中的位置（防止覆盖）');
+                updatedWidget.x = storedWidget.x;
+                updatedWidget.y = storedWidget.y;
               }
             }
             
-            return widget;
+            // 如果不是正在保存大小，检查大小是否不一致，保留 localStorage 的大小
+            if (!isSavingSize) {
+              const sizeChanged = 
+                widget.width !== storedWidget.width || 
+                widget.height !== storedWidget.height;
+              
+              if (sizeChanged) {
+                console.log(`⚠️ 小组件 ${widget.id} 大小数据不一致:`);
+                console.log('  - 当前 store:', { width: widget.width, height: widget.height });
+                console.log('  - localStorage:', { width: storedWidget.width, height: storedWidget.height });
+                console.log('  - 保留 localStorage 中的大小（防止覆盖）');
+                updatedWidget.width = storedWidget.width;
+                updatedWidget.height = storedWidget.height;
+              }
+            }
+            
+            return updatedWidget;
           });
         } catch (parseError) {
-          console.error('❌ 解析 localStorage 数据失败:', parseError);
+          console.warn('⚠️ 解析 localStorage 数据失败，使用当前数据');
         }
-      } else if (isSavingPositionOrSize) {
-        console.log('📍 正在保存位置/大小更新，使用 store 中的新值');
       }
       
       console.log('💾 保存小组件设置到 localStorage');
@@ -200,11 +205,8 @@ export const useWidgetStore = defineStore('widget', () => {
   
   // ==================== 响应式监听 ====================
   
-  // 防抖定时器
-  let autoSaveTimer: number | null = null;
-  
   /**
-   * 监听设置变化，自动保存（带防抖）
+   * 监听设置变化，自动保存
    */
   watch(
     widgets,
@@ -213,18 +215,8 @@ export const useWidgetStore = defineStore('widget', () => {
         console.log('⏭️ 正在加载设置，跳过自动保存');
         return;
       }
-      
-      // 清除之前的定时器
-      if (autoSaveTimer) {
-        clearTimeout(autoSaveTimer);
-      }
-      
-      // 设置新的防抖定时器（800ms 后保存）
-      autoSaveTimer = window.setTimeout(() => {
-        console.log('📝 小组件设置已变化，触发自动保存');
-        saveSettings();
-        autoSaveTimer = null;
-      }, 800);
+      console.log('📝 小组件设置已变化，触发自动保存');
+      saveSettings();
     },
     { deep: true }
   );
@@ -312,37 +304,12 @@ export const useWidgetStore = defineStore('widget', () => {
       ...defaultConfig,
     };
     
-    console.log(`📝 准备添加小组件: ${type}`, {
-      id,
-      位置: { x: widget.x, y: widget.y },
-      大小: { width: widget.width, height: widget.height }
-    });
-    
     widgets.value.push(widget);
-    
-    // 🔑 关键：立即保存到 localStorage，确保新窗口能读取到数据
-    console.log(`💾 立即保存小组件数据到 localStorage...`);
-    saveSettings();
-    
-    // 验证保存是否成功
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      const savedWidget = parsed.find((w: WidgetSettings) => w.id === id);
-      if (savedWidget) {
-        console.log(`✅ 验证: 小组件已保存到 localStorage`, {
-          位置: { x: savedWidget.x, y: savedWidget.y },
-          大小: { width: savedWidget.width, height: savedWidget.height }
-        });
-      } else {
-        console.error(`❌ 验证失败: localStorage 中找不到新小组件 ${id}`);
-      }
-    }
     
     // 创建窗口
     await createWidgetWindow(widget);
     
-    console.log(`✅ 添加小组件完成: ${type} (${id})`);
+    console.log(`✅ 添加小组件: ${type} (${id})`);
   }
   
   /**
@@ -357,9 +324,6 @@ export const useWidgetStore = defineStore('widget', () => {
       // 从列表移除
       widgets.value.splice(index, 1);
       
-      // 🔑 关键：立即保存，确保数据同步
-      saveSettings();
-      
       console.log(`✅ 移除小组件: ${widgetId}`);
     }
   }
@@ -370,36 +334,71 @@ export const useWidgetStore = defineStore('widget', () => {
   async function updateWidget(widgetId: string, updates: Partial<WidgetSettings>) {
     const widget = widgets.value.find(w => w.id === widgetId);
     if (widget) {
+      // 更新小组件设置
       Object.assign(widget, updates);
       
       // 如果窗口存在，更新窗口属性
       const window = widgetWindows.value.get(widgetId);
       if (window) {
-        if (updates.width !== undefined || updates.height !== undefined) {
-          await window.setSize(new LogicalSize(widget.width, widget.height));
-        }
-        if (updates.alwaysOnTop !== undefined) {
-          await window.setAlwaysOnTop(widget.alwaysOnTop);
+        try {
+          // 更新窗口大小
+          if (updates.width !== undefined || updates.height !== undefined) {
+            await window.setSize(new LogicalSize(widget.width, widget.height));
+            console.log(`📐 更新窗口大小: ${widget.width}x${widget.height}`);
+          }
+          
+          // 更新置顶状态
+          if (updates.alwaysOnTop !== undefined) {
+            await window.setAlwaysOnTop(widget.alwaysOnTop);
+            console.log(`📌 更新置顶状态: ${widget.alwaysOnTop}`);
+          }
+          
+          // 其他样式属性（backgroundColor, textColor, opacity, borderRadius）
+          // 会通过响应式系统自动更新，无需手动处理窗口属性
+          if (updates.backgroundColor || updates.textColor || 
+              updates.opacity !== undefined || updates.borderRadius !== undefined) {
+            console.log(`🎨 样式属性已更新，将通过响应式系统自动应用`);
+          }
+        } catch (error) {
+          console.error(`❌ 更新窗口属性失败:`, error);
         }
       }
       
-      console.log(`✅ 更新小组件设置: ${widgetId}`);
+      console.log(`✅ 更新小组件设置: ${widgetId}`, updates);
     }
   }
   
   /**
    * 切换小组件启用状态
+   * 参考 Dock 的实现，重新加载数据以避免使用过期的位置和大小
    */
   async function toggleWidget(widgetId: string, enabled: boolean) {
     const widget = widgets.value.find(w => w.id === widgetId);
     if (widget) {
-      widget.enabled = enabled;
+      // 🔑 关键：在切换前重新加载设置，获取最新的位置和大小
+      console.log(`🔄 [toggleWidget] 重新加载设置以获取最新位置...`);
+      loadSettings();
       
-      // 🔑 关键：立即保存状态，确保窗口能读取最新数据
-      saveSettings();
+      // 等待加载完成
+      await new Promise(resolve => setTimeout(resolve, 150));
+      
+      // 重新获取组件（现在是最新数据）
+      const updatedWidget = widgets.value.find(w => w.id === widgetId);
+      if (!updatedWidget) {
+        console.error(`❌ 找不到小组件: ${widgetId}`);
+        return;
+      }
+      
+      updatedWidget.enabled = enabled;
       
       if (enabled) {
-        await createWidgetWindow(widget);
+        console.log(`📍 [toggleWidget] 使用最新位置创建窗口:`, {
+          x: updatedWidget.x,
+          y: updatedWidget.y,
+          width: updatedWidget.width,
+          height: updatedWidget.height
+        });
+        await createWidgetWindow(updatedWidget);
       } else {
         await closeWidgetWindow(widgetId);
       }
@@ -409,46 +408,45 @@ export const useWidgetStore = defineStore('widget', () => {
   }
   
   /**
-   * 保存小组件位置
+   * 保存小组件位置（逻辑坐标）
+   * 参考 Dock 的实现，使用标志位防止被其他更新覆盖
    */
   function saveWidgetPosition(widgetId: string, x: number, y: number) {
     const widget = widgets.value.find(w => w.id === widgetId);
-    if (widget && (widget.x !== x || widget.y !== y)) {
-      // 设置标志，表示正在保存位置
-      isSavingPositionOrSize = true;
+    if (widget) {
+      console.log(`📍 保存小组件位置: ${widgetId} (逻辑坐标: ${x}, ${y})`);
+      
+      // 🔑 设置标志，表示正在保存位置
+      isSavingPositionMap.set(widgetId, true);
       
       try {
         widget.x = x;
         widget.y = y;
-        // watch 监听器会自动触发防抖保存，但为了确保保存，这里也手动调用一次
-        // saveSettings(); // 由 watch 处理即可
+        saveSettings(); // 此时 saveSettings 知道是位置更新
       } finally {
-        // 保存完成后重置标志（稍微延迟）
-        setTimeout(() => {
-          isSavingPositionOrSize = false;
-        }, 1000);
+        isSavingPositionMap.set(widgetId, false); // 保存完成后重置
       }
     }
   }
   
   /**
-   * 保存小组件大小
+   * 保存小组件大小（逻辑尺寸）
+   * 参考 Dock 的实现，使用标志位防止被其他更新覆盖
    */
   function saveWidgetSize(widgetId: string, width: number, height: number) {
     const widget = widgets.value.find(w => w.id === widgetId);
-    if (widget && (widget.width !== width || widget.height !== height)) {
-      // 设置标志，表示正在保存大小
-      isSavingPositionOrSize = true;
+    if (widget) {
+      console.log(`📏 保存小组件大小: ${widgetId} (${width}x${height})`);
+      
+      // 🔑 设置标志，表示正在保存大小
+      isSavingSizeMap.set(widgetId, true);
       
       try {
         widget.width = width;
         widget.height = height;
-        // watch 监听器会自动触发防抖保存
+        saveSettings(); // 此时 saveSettings 知道是大小更新
       } finally {
-        // 保存完成后重置标志（稍微延迟）
-        setTimeout(() => {
-          isSavingPositionOrSize = false;
-        }, 1000);
+        isSavingSizeMap.set(widgetId, false); // 保存完成后重置
       }
     }
   }

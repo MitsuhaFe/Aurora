@@ -755,309 +755,156 @@
         </div>
         
         <!-- 小组件设置 -->
-        <!-- 小组件设置 -->
         <div v-else-if="activeTab === 'widgets'" class="settings-panel">
-          <div class="widgets-grid">
-            <!-- 时钟组件卡片 -->
-            <div class="widget-card">
-              <div class="widget-card-header">
-                <span class="widget-icon">⏰</span>
-                <h3>时钟组件</h3>
-              </div>
-              <div class="widget-card-body">
-                <p class="widget-description">显示当前时间、日期和星期</p>
-                
-                <div class="widget-setting">
-                  <label>启用组件</label>
-                  <input 
-                    type="checkbox" 
-                    :id="'widget-clock-enabled'"
-                    v-model="widgetSettings.clock.enabled"
-                    @change="handleWidgetToggle('clock')"
-                  />
-                  <label :for="'widget-clock-enabled'" class="toggle-small"></label>
+          <!-- 添加小组件 -->
+          <div class="widget-add-section">
+            <h3>添加小组件</h3>
+            <div class="widget-types">
+              <button class="widget-type-btn" @click="addWidgetByType('time')">
+                <span class="widget-type-icon">🕐</span>
+                <span class="widget-type-name">时间</span>
+              </button>
+              <button class="widget-type-btn" @click="addWidgetByType('network')">
+                <span class="widget-type-icon">🌐</span>
+                <span class="widget-type-name">网络监控</span>
+              </button>
+              <button class="widget-type-btn" @click="addWidgetByType('system')">
+                <span class="widget-type-icon">💻</span>
+                <span class="widget-type-name">系统监控</span>
+              </button>
+              <button class="widget-type-btn" @click="addWidgetByType('disk')">
+                <span class="widget-type-icon">💾</span>
+                <span class="widget-type-name">磁盘监控</span>
+              </button>
+            </div>
+          </div>
+          
+          <!-- 小组件列表 -->
+          <div class="widget-list-section">
+            <h3>已添加的小组件</h3>
+            <div v-if="widgetStore.widgets.length > 0" class="widget-list">
+              <div 
+                v-for="widget in widgetStore.widgets" 
+                :key="widget.id" 
+                class="widget-item"
+              >
+                <div class="widget-info">
+                  <span class="widget-icon">{{ getWidgetIcon(widget.type) }}</span>
+                  <div class="widget-details">
+                    <div class="widget-name">{{ getWidgetName(widget.type) }}</div>
+                    <div class="widget-id">ID: {{ widget.id }}</div>
+                  </div>
                 </div>
                 
-                <div class="widget-setting">
-                  <label>背景颜色</label>
-                  <input 
-                    type="color" 
-                    v-model="widgetSettings.clock.backgroundColor"
-                    @change="updateWidgetSettings('clock')"
-                    class="color-input"
-                  />
-                </div>
-                
-                <div class="widget-setting">
-                  <label>文字颜色</label>
-                  <input 
-                    type="color" 
-                    v-model="widgetSettings.clock.textColor"
-                    @change="updateWidgetSettings('clock')"
-                    class="color-input"
-                  />
-                </div>
-                
-                <div class="widget-setting">
-                  <label>透明度</label>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="1" 
-                    step="0.05"
-                    v-model.number="widgetSettings.clock.opacity"
-                    @change="updateWidgetSettings('clock')"
-                    class="range-input"
-                  />
-                  <span class="value-label">{{ Math.round(widgetSettings.clock.opacity * 100) }}%</span>
-                </div>
-                
-                <div class="widget-setting">
-                  <label>圆角</label>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="30" 
-                    step="2"
-                    v-model.number="widgetSettings.clock.borderRadius"
-                    @change="updateWidgetSettings('clock')"
-                    class="range-input"
-                  />
-                  <span class="value-label">{{ widgetSettings.clock.borderRadius }}px</span>
-                </div>
-                
-                <div class="widget-actions">
-                  <button class="btn-create" @click="createWidgetInstance('clock')" :disabled="widgetSettings.clock.enabled">
-                    {{ widgetSettings.clock.enabled ? '已创建' : '创建组件' }}
+                <div class="widget-controls">
+                  <label class="toggle-small">
+                    <input 
+                      type="checkbox" 
+                      :checked="widget.enabled"
+                      @change="toggleWidgetEnabled(widget.id, ($event.target as HTMLInputElement).checked)"
+                    />
+                    <span></span>
+                  </label>
+                  <button 
+                    class="btn-icon" 
+                    @click="selectedWidget = widget"
+                    title="设置"
+                  >
+                    ⚙️
+                  </button>
+                  <button 
+                    class="btn-icon btn-danger" 
+                    @click="removeWidgetById(widget.id)"
+                    title="删除"
+                  >
+                    🗑️
                   </button>
                 </div>
               </div>
             </div>
-            
-            <!-- 网络监控卡片 -->
-            <div class="widget-card">
-              <div class="widget-card-header">
-                <span class="widget-icon">🌐</span>
-                <h3>网络监控</h3>
-              </div>
-              <div class="widget-card-body">
-                <p class="widget-description">实时显示网络上传/下载速度</p>
-                
-                <div class="widget-setting">
-                  <label>启用组件</label>
-                  <input 
-                    type="checkbox" 
-                    :id="'widget-network-enabled'"
-                    v-model="widgetSettings.network.enabled"
-                    @change="handleWidgetToggle('network')"
-                  />
-                  <label :for="'widget-network-enabled'" class="toggle-small"></label>
-                </div>
-                
-                <div class="widget-setting">
-                  <label>背景颜色</label>
-                  <input 
-                    type="color" 
-                    v-model="widgetSettings.network.backgroundColor"
-                    @change="updateWidgetSettings('network')"
-                    class="color-input"
-                  />
-                </div>
-                
-                <div class="widget-setting">
-                  <label>文字颜色</label>
-                  <input 
-                    type="color" 
-                    v-model="widgetSettings.network.textColor"
-                    @change="updateWidgetSettings('network')"
-                    class="color-input"
-                  />
-                </div>
-                
-                <div class="widget-setting">
-                  <label>透明度</label>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="1" 
-                    step="0.05"
-                    v-model.number="widgetSettings.network.opacity"
-                    @change="updateWidgetSettings('network')"
-                    class="range-input"
-                  />
-                  <span class="value-label">{{ Math.round(widgetSettings.network.opacity * 100) }}%</span>
-                </div>
-                
-                <div class="widget-setting">
-                  <label>圆角</label>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="30" 
-                    step="2"
-                    v-model.number="widgetSettings.network.borderRadius"
-                    @change="updateWidgetSettings('network')"
-                    class="range-input"
-                  />
-                  <span class="value-label">{{ widgetSettings.network.borderRadius }}px</span>
-                </div>
-                
-                <div class="widget-actions">
-                  <button class="btn-create" @click="createWidgetInstance('network')" :disabled="widgetSettings.network.enabled">
-                    {{ widgetSettings.network.enabled ? '已创建' : '创建组件' }}
-                  </button>
-                </div>
-              </div>
+            <div v-else class="no-widgets">
+              <p>还没有添加任何小组件</p>
+              <p class="hint">点击上方按钮添加小组件</p>
             </div>
-            
-            <!-- 系统监控卡片 -->
-            <div class="widget-card">
-              <div class="widget-card-header">
-                <span class="widget-icon">💻</span>
-                <h3>系统监控</h3>
+          </div>
+          
+          <!-- 小组件详细设置弹窗 -->
+          <div v-if="selectedWidget" class="widget-settings-modal" @click.self="selectedWidget = null">
+            <div class="modal-content">
+              <div class="modal-header">
+                <h3>{{ getWidgetName(selectedWidget.type) }} 设置</h3>
+                <button class="close-btn" @click="selectedWidget = null">✕</button>
               </div>
-              <div class="widget-card-body">
-                <p class="widget-description">监控 CPU、内存使用情况</p>
-                
-                <div class="widget-setting">
-                  <label>启用组件</label>
-                  <input 
-                    type="checkbox" 
-                    :id="'widget-system-enabled'"
-                    v-model="widgetSettings.system.enabled"
-                    @change="handleWidgetToggle('system')"
-                  />
-                  <label :for="'widget-system-enabled'" class="toggle-small"></label>
-                </div>
-                
-                <div class="widget-setting">
+              
+              <div class="modal-body">
+                <!-- 背景颜色 -->
+                <div class="setting-item">
                   <label>背景颜色</label>
                   <input 
                     type="color" 
-                    v-model="widgetSettings.system.backgroundColor"
-                    @change="updateWidgetSettings('system')"
-                    class="color-input"
+                    v-model="selectedWidget.backgroundColor"
+                    @input="handleWidgetStyleChange"
                   />
                 </div>
                 
-                <div class="widget-setting">
-                  <label>文字颜色</label>
+                <!-- 字体颜色 -->
+                <div class="setting-item">
+                  <label>字体颜色</label>
                   <input 
                     type="color" 
-                    v-model="widgetSettings.system.textColor"
-                    @change="updateWidgetSettings('system')"
-                    class="color-input"
+                    v-model="selectedWidget.textColor"
+                    @input="handleWidgetStyleChange"
                   />
                 </div>
                 
-                <div class="widget-setting">
-                  <label>透明度</label>
+                <!-- 透明度 -->
+                <div class="setting-item">
+                  <label>透明度: {{ (selectedWidget.opacity * 100).toFixed(0) }}%</label>
                   <input 
                     type="range" 
                     min="0" 
                     max="1" 
-                    step="0.05"
-                    v-model.number="widgetSettings.system.opacity"
-                    @change="updateWidgetSettings('system')"
-                    class="range-input"
+                    step="0.01"
+                    v-model.number="selectedWidget.opacity"
+                    @input="handleWidgetStyleChange"
                   />
-                  <span class="value-label">{{ Math.round(widgetSettings.system.opacity * 100) }}%</span>
                 </div>
                 
-                <div class="widget-setting">
-                  <label>圆角</label>
+                <!-- 圆角 -->
+                <div class="setting-item">
+                  <label>圆角: {{ selectedWidget.borderRadius }}px</label>
                   <input 
                     type="range" 
                     min="0" 
-                    max="30" 
+                    max="40" 
                     step="2"
-                    v-model.number="widgetSettings.system.borderRadius"
-                    @change="updateWidgetSettings('system')"
-                    class="range-input"
-                  />
-                  <span class="value-label">{{ widgetSettings.system.borderRadius }}px</span>
-                </div>
-                
-                <div class="widget-actions">
-                  <button class="btn-create" @click="createWidgetInstance('system')" :disabled="widgetSettings.system.enabled">
-                    {{ widgetSettings.system.enabled ? '已创建' : '创建组件' }}
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 磁盘监控卡片 -->
-            <div class="widget-card">
-              <div class="widget-card-header">
-                <span class="widget-icon">💿</span>
-                <h3>磁盘监控</h3>
-              </div>
-              <div class="widget-card-body">
-                <p class="widget-description">显示磁盘使用情况</p>
-                
-                <div class="widget-setting">
-                  <label>启用组件</label>
-                  <input 
-                    type="checkbox" 
-                    :id="'widget-disk-enabled'"
-                    v-model="widgetSettings.disk.enabled"
-                    @change="handleWidgetToggle('disk')"
-                  />
-                  <label :for="'widget-disk-enabled'" class="toggle-small"></label>
-                </div>
-                
-                <div class="widget-setting">
-                  <label>背景颜色</label>
-                  <input 
-                    type="color" 
-                    v-model="widgetSettings.disk.backgroundColor"
-                    @change="updateWidgetSettings('disk')"
-                    class="color-input"
+                    v-model.number="selectedWidget.borderRadius"
+                    @input="handleWidgetStyleChange"
                   />
                 </div>
                 
-                <div class="widget-setting">
-                  <label>文字颜色</label>
-                  <input 
-                    type="color" 
-                    v-model="widgetSettings.disk.textColor"
-                    @change="updateWidgetSettings('disk')"
-                    class="color-input"
-                  />
+                <!-- 始终置顶 -->
+                <div class="setting-item">
+                  <label>
+                    <input 
+                      type="checkbox" 
+                      v-model="selectedWidget.alwaysOnTop"
+                      @change="handleWidgetPropertyChange"
+                    />
+                    始终置顶
+                  </label>
                 </div>
                 
-                <div class="widget-setting">
-                  <label>透明度</label>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="1" 
-                    step="0.05"
-                    v-model.number="widgetSettings.disk.opacity"
-                    @change="updateWidgetSettings('disk')"
-                    class="range-input"
-                  />
-                  <span class="value-label">{{ Math.round(widgetSettings.disk.opacity * 100) }}%</span>
-                </div>
-                
-                <div class="widget-setting">
-                  <label>圆角</label>
-                  <input 
-                    type="range" 
-                    min="0" 
-                    max="30" 
-                    step="2"
-                    v-model.number="widgetSettings.disk.borderRadius"
-                    @change="updateWidgetSettings('disk')"
-                    class="range-input"
-                  />
-                  <span class="value-label">{{ widgetSettings.disk.borderRadius }}px</span>
-                </div>
-                
-                <div class="widget-actions">
-                  <button class="btn-create" @click="createWidgetInstance('disk')" :disabled="widgetSettings.disk.enabled">
-                    {{ widgetSettings.disk.enabled ? '已创建' : '创建组件' }}
-                  </button>
+                <!-- 固定位置 -->
+                <div class="setting-item">
+                  <label>
+                    <input 
+                      type="checkbox" 
+                      v-model="selectedWidget.pinPosition"
+                      @change="handleWidgetPropertyChange"
+                    />
+                    固定位置（禁止拖动）
+                  </label>
                 </div>
               </div>
             </div>
@@ -1092,12 +939,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, reactive } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { open } from '@tauri-apps/api/dialog';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { useDockStore } from '@/stores/dockStore';
-import { useWidgetStore, type WidgetType } from '@/stores/widgetStore';
+import { useWidgetStore } from '@/stores/widgetStore';
+import type { WidgetType, WidgetSettings } from '@/stores/widgetStore';
 
 const router = useRouter();
 const wallpaperStore = useWallpaperStore();
@@ -1208,96 +1056,6 @@ async function handleDockToggle() {
   }
 }
 
-// ==================== 小组件相关 ====================
-
-// 小组件设置
-const widgetSettings = reactive({
-  clock: {
-    enabled: false,
-    backgroundColor: '#1e1e1e',
-    textColor: '#ffffff',
-    opacity: 0.95,
-    borderRadius: 16,
-  },
-  network: {
-    enabled: false,
-    backgroundColor: '#1e1e1e',
-    textColor: '#ffffff',
-    opacity: 0.95,
-    borderRadius: 16,
-  },
-  system: {
-    enabled: false,
-    backgroundColor: '#1e1e1e',
-    textColor: '#ffffff',
-    opacity: 0.95,
-    borderRadius: 16,
-  },
-  disk: {
-    enabled: false,
-    backgroundColor: '#1e1e1e',
-    textColor: '#ffffff',
-    opacity: 0.95,
-    borderRadius: 16,
-  },
-});
-
-/**
- * 创建小组件实例
- */
-async function createWidgetInstance(type: WidgetType) {
-  try {
-    const settings = widgetSettings[type];
-    await widgetStore.createWidget(type, settings);
-    widgetSettings[type].enabled = true;
-    console.log('✅ 创建小组件成功:', type);
-  } catch (error) {
-    console.error('❌ 创建小组件失败:', type, error);
-  }
-}
-
-/**
- * 切换小组件启用状态
- */
-async function handleWidgetToggle(type: WidgetType) {
-  const enabled = widgetSettings[type].enabled;
-  
-  try {
-    if (enabled) {
-      await createWidgetInstance(type);
-    } else {
-      // 关闭所有该类型的小组件
-      const widgets = widgetStore.getWidgetsByType(type);
-      for (const widget of widgets) {
-        await widgetStore.closeWidget(widget.id);
-      }
-      console.log('✅ 关闭小组件成功:', type);
-    }
-  } catch (error) {
-    console.error('❌ 切换小组件失败:', type, error);
-    // 恢复状态
-    widgetSettings[type].enabled = !enabled;
-  }
-}
-
-/**
- * 更新小组件设置
- */
-async function updateWidgetSettings(type: WidgetType) {
-  try {
-    const widgets = widgetStore.getWidgetsByType(type);
-    const settings = widgetSettings[type];
-    
-    for (const widget of widgets) {
-      await widgetStore.updateWidgetSettings(widget.id, settings);
-    }
-    
-    console.log('✅ 更新小组件设置成功:', type);
-  } catch (error) {
-    console.error('❌ 更新小组件设置失败:', type, error);
-  }
-}
-
 /**
  * 添加图标
  */
@@ -1375,6 +1133,117 @@ function handleRemoveIcon(iconId: string) {
   console.log('🗑️ 移除图标:', iconId);
   dockStore.removeIcon(iconId);
   console.log('✅ 图标已移除');
+}
+
+// ==================== 小组件相关方法 ====================
+
+// 选中的小组件（用于编辑）
+const selectedWidget = ref<WidgetSettings | null>(null);
+
+// 获取小组件图标
+function getWidgetIcon(type: WidgetType): string {
+  const icons: Record<WidgetType, string> = {
+    time: '🕐',
+    network: '🌐',
+    system: '💻',
+    disk: '💾',
+  };
+  return icons[type];
+}
+
+// 获取小组件名称
+function getWidgetName(type: WidgetType): string {
+  const names: Record<WidgetType, string> = {
+    time: '时间',
+    network: '网络监控',
+    system: '系统监控',
+    disk: '磁盘监控',
+  };
+  return names[type];
+}
+
+// 添加小组件
+async function addWidgetByType(type: WidgetType) {
+  try {
+    await widgetStore.addWidget(type);
+    console.log(`✅ 添加小组件成功: ${type}`);
+  } catch (error) {
+    console.error(`❌ 添加小组件失败: ${type}`, error);
+  }
+}
+
+// 切换小组件启用状态
+async function toggleWidgetEnabled(widgetId: string, enabled: boolean) {
+  try {
+    await widgetStore.toggleWidget(widgetId, enabled);
+    console.log(`✅ 切换小组件状态: ${widgetId} -> ${enabled ? '启用' : '禁用'}`);
+  } catch (error) {
+    console.error('❌ 切换小组件状态失败:', error);
+  }
+}
+
+// 删除小组件
+async function removeWidgetById(widgetId: string) {
+  if (confirm('确定要删除这个小组件吗？')) {
+    try {
+      await widgetStore.removeWidget(widgetId);
+      console.log(`✅ 删除小组件成功: ${widgetId}`);
+    } catch (error) {
+      console.error('❌ 删除小组件失败:', error);
+    }
+  }
+}
+
+// 防抖定时器
+let styleChangeTimer: number | null = null;
+
+// 处理小组件样式变化（防抖）
+function handleWidgetStyleChange() {
+  if (!selectedWidget.value) return;
+  
+  // 清除之前的定时器
+  if (styleChangeTimer) {
+    clearTimeout(styleChangeTimer);
+  }
+  
+  // 设置新的定时器，300ms 后触发更新
+  styleChangeTimer = window.setTimeout(() => {
+    notifyWidgetUpdate();
+  }, 300);
+}
+
+// 处理小组件属性变化（立即生效）
+async function handleWidgetPropertyChange() {
+  if (!selectedWidget.value) return;
+  
+  // 立即更新窗口属性
+  try {
+    await widgetStore.updateWidget(selectedWidget.value.id, {
+      alwaysOnTop: selectedWidget.value.alwaysOnTop,
+      pinPosition: selectedWidget.value.pinPosition,
+    });
+  } catch (error) {
+    console.error('❌ 更新窗口属性失败:', error);
+  }
+  
+  // 通知其他窗口
+  notifyWidgetUpdate();
+}
+
+// 通知小组件窗口更新
+function notifyWidgetUpdate() {
+  // 触发 storage 事件通知其他窗口
+  // 通过先移除再设置来触发 storage 事件
+  const currentData = localStorage.getItem('aurora-widget-settings');
+  localStorage.removeItem('aurora-widget-settings');
+  
+  // 使用 setTimeout 确保 remove 事件先触发
+  setTimeout(() => {
+    if (currentData) {
+      localStorage.setItem('aurora-widget-settings', currentData);
+    }
+    console.log('📢 已通知小组件窗口更新设置');
+  }, 10);
 }
 
 // ==================== 跨窗口同步 ====================
@@ -1990,198 +1859,308 @@ onUnmounted(() => {
   transform: translateY(0);
 }
 
-/* ==================== 小组件样式 ==================== */
+/* ==================== 小组件相关样式 ==================== */
 
-.widgets-grid {
+.widget-add-section {
+  margin-bottom: 32px;
+}
+
+.widget-add-section h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #1a1a1a;
+}
+
+.widget-types {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 24px;
-  padding: 8px;
-}
-
-.widget-card {
-  background: white;
-  border-radius: 16px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-
-.widget-card:hover {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
-  transform: translateY(-2px);
-}
-
-.widget-card-header {
-  display: flex;
-  align-items: center;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
   gap: 12px;
-  padding: 20px;
+}
+
+.widget-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
   color: white;
 }
 
-.widget-icon {
+.widget-type-btn:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+}
+
+.widget-type-icon {
   font-size: 32px;
 }
 
-.widget-card-header h3 {
-  margin: 0;
-  font-size: 18px;
+.widget-type-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.widget-list-section h3 {
+  font-size: 16px;
   font-weight: 600;
-}
-
-.widget-card-body {
-  padding: 20px;
-}
-
-.widget-description {
-  font-size: 14px;
-  color: #6b7280;
-  margin-bottom: 20px;
-  line-height: 1.5;
-}
-
-.widget-setting {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   margin-bottom: 16px;
+  color: #1a1a1a;
+}
+
+.widget-list {
+  display: flex;
+  flex-direction: column;
   gap: 12px;
 }
 
-.widget-setting label {
-  font-size: 14px;
-  color: #374151;
-  font-weight: 500;
-  flex: 1;
+.widget-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px;
+  background: #f5f5f7;
+  border-radius: 12px;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
 }
 
-.widget-setting .value-label {
-  font-size: 13px;
-  color: #6b7280;
-  font-family: 'Consolas', monospace;
-  min-width: 50px;
-  text-align: right;
+.widget-item:hover {
+  background: #ebebed;
+  border-color: #667eea;
+}
+
+.widget-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.widget-icon {
+  font-size: 28px;
+}
+
+.widget-details {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.widget-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+.widget-id {
+  font-size: 11px;
+  color: #999;
+  font-family: 'Consolas', 'Monaco', monospace;
+}
+
+.widget-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .toggle-small {
   position: relative;
-  width: 44px;
+  display: inline-block;
+  width: 40px;
   height: 24px;
-  background: #e5e7eb;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.3s ease;
 }
 
-.toggle-small::after {
-  content: '';
+.toggle-small input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-small span {
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
-  background: white;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-small span:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
   border-radius: 50%;
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-input[type="checkbox"]:checked + .toggle-small {
-  background: #667eea;
+.toggle-small input:checked + span {
+  background-color: #667eea;
 }
 
-input[type="checkbox"]:checked + .toggle-small::after {
-  left: 22px;
+.toggle-small input:checked + span:before {
+  transform: translateX(16px);
 }
 
-.color-input {
-  width: 50px;
+.btn-icon {
+  background: transparent;
+  border: none;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.btn-icon.btn-danger:hover {
+  background: rgba(220, 38, 38, 0.1);
+}
+
+.no-widgets {
+  text-align: center;
+  padding: 40px 20px;
+  color: #999;
+}
+
+.no-widgets p {
+  margin: 8px 0;
+}
+
+.no-widgets .hint {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
+/* 小组件设置弹窗 */
+.widget-settings-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 24px;
+  border-bottom: 1px solid #ebebed;
+}
+
+.modal-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.close-btn {
+  background: transparent;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 0;
+  width: 32px;
   height: 32px;
-  border: 2px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.close-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.modal-body .setting-item {
+  margin-bottom: 20px;
+  border: none;
+  padding: 0;
+}
+
+.modal-body .setting-item label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a1a1a;
+}
+
+.modal-body .setting-item input[type="color"] {
+  width: 100%;
+  height: 50px;
+  border: 1px solid #ebebed;
   border-radius: 8px;
   cursor: pointer;
-  transition: all 0.2s ease;
 }
 
-.color-input:hover {
-  border-color: #667eea;
-}
-
-.range-input {
-  flex: 1;
-  height: 6px;
-  -webkit-appearance: none;
-  appearance: none;
-  background: #e5e7eb;
-  border-radius: 3px;
-  outline: none;
-}
-
-.range-input::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  background: #667eea;
-  border-radius: 50%;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.range-input::-webkit-slider-thumb:hover {
-  background: #764ba2;
-  transform: scale(1.1);
-}
-
-.range-input::-moz-range-thumb {
-  width: 18px;
-  height: 18px;
-  background: #667eea;
-  border-radius: 50%;
-  cursor: pointer;
-  border: none;
-  transition: all 0.2s ease;
-}
-
-.range-input::-moz-range-thumb:hover {
-  background: #764ba2;
-  transform: scale(1.1);
-}
-
-.widget-actions {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid #e5e7eb;
-}
-
-.btn-create {
+.modal-body .setting-item input[type="range"] {
   width: 100%;
-  padding: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 10px;
-  font-size: 15px;
-  font-weight: 600;
+  height: 6px;
+  border-radius: 3px;
+  background: #ebebed;
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.modal-body .setting-item input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #667eea;
   cursor: pointer;
-  transition: all 0.3s ease;
 }
 
-.btn-create:hover:not(:disabled) {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+.modal-body .setting-item input[type="checkbox"] {
+  margin-right: 8px;
 }
 
-.btn-create:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  background: #9ca3af;
-}
-
-.btn-create:active:not(:disabled) {
-  transform: translateY(0);
+.modal-footer {
+  padding: 16px 24px;
+  border-top: 1px solid #ebebed;
+  display: flex;
+  justify-content: flex-end;
 }
 </style>
 

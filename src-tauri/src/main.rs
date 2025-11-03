@@ -1,7 +1,10 @@
 // Prevents additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod system_info;
+
 use serde::{Deserialize, Serialize};
+use system_info::SystemMonitor;
 
 #[derive(Debug, Serialize, Deserialize)]
 struct IconResult {
@@ -278,8 +281,16 @@ fn extract_icon(_exe_path: String) -> IconResult {
 }
 
 fn main() {
+    let system_monitor = SystemMonitor::new();
+    
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![extract_icon])
+        .manage(system_monitor)
+        .invoke_handler(tauri::generate_handler![
+            extract_icon,
+            system_info::get_system_info,
+            system_info::get_disk_info,
+            system_info::get_network_info
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

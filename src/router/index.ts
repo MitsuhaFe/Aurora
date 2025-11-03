@@ -12,6 +12,11 @@ const routes: RouteRecordRaw[] = [
     name: 'Dock',
     component: () => import('@/views/Dock.vue'),
   },
+  {
+    path: '/widget',
+    name: 'Widget',
+    component: () => import('@/views/Widgets/Index.vue'),
+  },
 ];
 
 const router = createRouter({
