@@ -166,8 +166,30 @@ const mouse = new THREE.Vector2();
 let isMouseOverModel = true; // 初始化为 true，确保第一次检测时能触发状态改变
 let smartClickThroughInterval: number | null = null;
 
-// 智能穿透：定时检测鼠标是否在模型上
+// 边界盒检测用（性能更好）
+let modelBoundingBox: THREE.Box3 | null = null;
+
+// 优化 raycaster 性能
+raycaster.firstHitOnly = true; // 只检测第一个交点
+raycaster.params.Points = { threshold: 0.1 };
+raycaster.params.Line = { threshold: 0.1 };
+
+// 缓存窗口信息，避免频繁调用 API
+let cachedWindowPosition = { x: 0, y: 0 };
+let cachedWindowSize = { width: 500, height: 650 };
+let lastWindowInfoUpdate = 0;
+const WINDOW_INFO_CACHE_TIME = 1000; // 窗口信息缓存1秒
+
+// 检测节流
+let isCheckingSmartClickThrough = false;
+
+// 智能穿透：定时检测鼠标是否在模型上（优化版）
 async function checkSmartClickThrough() {
+  // 节流：如果正在检测，跳过
+  if (isCheckingSmartClickThrough) {
+    return;
+  }
+  
   // 如果禁用智能穿透或启用了完全穿透，不处理
   if (!smartClickThrough.value || clickThrough.value || !vrmLoader || !containerRef.value) {
     return;
@@ -181,32 +203,56 @@ async function checkSmartClickThrough() {
     return;
   }
 
+  isCheckingSmartClickThrough = true;
+
   try {
     // 获取鼠标的屏幕坐标（使用 Rust 后端，即使窗口穿透也能获取）
     const cursorPosition = await invoke<{ x: number; y: number }>('get_cursor_position');
     
-    // 获取窗口的屏幕位置
-    const windowPosition = await appWindow.outerPosition();
+    // 更新窗口信息缓存（每秒最多更新一次）
+    const now = Date.now();
+    if (now - lastWindowInfoUpdate > WINDOW_INFO_CACHE_TIME) {
+      const [windowPosition, windowSize] = await Promise.all([
+        appWindow.outerPosition(),
+        appWindow.outerSize()
+      ]);
+      cachedWindowPosition = windowPosition;
+      cachedWindowSize = windowSize;
+      lastWindowInfoUpdate = now;
+    }
     
-    // 计算鼠标相对于窗口的位置
-    const relativeX = cursorPosition.x - windowPosition.x;
-    const relativeY = cursorPosition.y - windowPosition.y;
-    
-    // 获取窗口尺寸
-    const windowSize = await appWindow.outerSize();
+    // 使用缓存的窗口信息计算鼠标相对位置
+    const relativeX = cursorPosition.x - cachedWindowPosition.x;
+    const relativeY = cursorPosition.y - cachedWindowPosition.y;
     
     // 计算鼠标在标准化设备坐标中的位置 (-1 到 +1)
-    mouse.x = (relativeX / windowSize.width) * 2 - 1;
-    mouse.y = -(relativeY / windowSize.height) * 2 + 1;
+    mouse.x = (relativeX / cachedWindowSize.width) * 2 - 1;
+    mouse.y = -(relativeY / cachedWindowSize.height) * 2 + 1;
 
-    // 使用 raycaster 检测鼠标是否在模型上
-    raycaster.setFromCamera(mouse, camera);
+    // 首先使用边界盒进行快速粗略检测（性能开销小）
+    if (!modelBoundingBox) {
+      modelBoundingBox = new THREE.Box3().setFromObject(vrm.scene);
+    }
     
-    // 递归检测所有子对象（包括模型的所有网格）
-    const intersects = raycaster.intersectObject(vrm.scene, true);
+    // 创建射线用于边界盒检测
+    raycaster.setFromCamera(mouse, camera);
+    const ray = raycaster.ray;
+    
+    // 快速边界盒检测
+    const boxIntersection = ray.intersectBox(modelBoundingBox, new THREE.Vector3());
+    
+    let isOverModel = false;
+    let intersects: any[] = [];
+    
+    // 只有在边界盒内时才进行精确的网格检测（减少性能消耗）
+    if (boxIntersection) {
+      // 精确检测，但只检测第一个交点（firstHitOnly 已设置）
+      intersects = raycaster.intersectObject(vrm.scene, true);
+      isOverModel = intersects.length > 0;
+    }
 
     const wasOverModel = isMouseOverModel;
-    isMouseOverModel = intersects.length > 0;
+    isMouseOverModel = isOverModel;
 
     // 更新调试信息
     if (debugMode.value) {
@@ -233,6 +279,8 @@ async function checkSmartClickThrough() {
     }
   } catch (error) {
     console.error('智能穿透检测错误:', error);
+  } finally {
+    isCheckingSmartClickThrough = false;
   }
 }
 
@@ -314,13 +362,13 @@ onMounted(async () => {
     }
   });
 
-  // 如果启用了智能穿透，启动定时检测（每 50ms 检测一次）
+  // 如果启用了智能穿透，启动定时检测（每 100ms 检测一次，降低性能消耗）
   // 注意：使用 Tauri API 获取鼠标位置是异步的，不能太频繁
   if (smartClickThrough.value && !clickThrough.value) {
     // 立即执行一次检测，确保初始状态正确
     await checkSmartClickThrough();
-    // 然后启动定时检测
-    smartClickThroughInterval = window.setInterval(checkSmartClickThrough, 50);
+    // 然后启动定时检测（100ms，减少动画卡顿）
+    smartClickThroughInterval = window.setInterval(checkSmartClickThrough, 100);
     console.log('🎯 智能穿透检测已启动（初始化）');
   }
 
@@ -602,6 +650,10 @@ async function loadVrmModel(path: string) {
       }
     }
 
+    // 重置边界盒（模型变化后需要重新计算）
+    modelBoundingBox = null;
+    console.log('✓ 已重置边界盒缓存');
+    
     isLoading.value = false;
     vrmPath.value = path;
     console.log('🎉 VRM模型加载完成！');
@@ -695,8 +747,8 @@ async function handleSettingsChanged(newSettings: any) {
       if (smartClickThroughInterval === null) {
         // 立即执行一次检测，确保初始状态正确
         await checkSmartClickThrough();
-        // 然后启动定时检测
-        smartClickThroughInterval = window.setInterval(checkSmartClickThrough, 50);
+        // 然后启动定时检测（100ms，减少动画卡顿）
+        smartClickThroughInterval = window.setInterval(checkSmartClickThrough, 100);
         console.log('🎯 智能穿透检测已启动');
       }
       // 注意：不需要手动设置初始状态，checkSmartClickThrough 会自动处理
