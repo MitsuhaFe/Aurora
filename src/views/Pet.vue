@@ -78,7 +78,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
-import { appWindow } from '@tauri-apps/api/window';
+import { appWindow, LogicalSize } from '@tauri-apps/api/window';
 import { readBinaryFile } from '@tauri-apps/api/fs';
 import { invoke, convertFileSrc } from '@tauri-apps/api/tauri';
 import { useVrmLoader } from '@/composables/useVrmLoader';
@@ -215,6 +215,52 @@ function resetSimplifiedCollisionMesh() {
   }
   // 同时重置边界盒
   modelBoundingBox = null;
+}
+
+// 计算窗口大小（根据设置模式）
+function calculateWindowSize(): { width: number; height: number } {
+  const windowSizeSettings = petStore.settings.windowSize;
+  
+  // 如果是自定义模式，直接返回用户设置的尺寸
+  if (windowSizeSettings?.mode === 'custom') {
+    return {
+      width: windowSizeSettings.width || 500,
+      height: windowSizeSettings.height || 650,
+    };
+  }
+  
+  // 自动模式：根据模型缩放计算窗口大小
+  const scale = petStore.settings.scale || 1.0;
+  
+  // 基础尺寸（适合标准大小的模型）
+  const baseWidth = 500;
+  const baseHeight = 650;
+  
+  // 根据缩放调整窗口大小
+  let width: number;
+  let height: number;
+  
+  if (scale <= 1.0) {
+    // 缩小模型时，窗口也适当缩小，但保持最小尺寸
+    width = Math.max(350, baseWidth * (0.7 + scale * 0.3)); // 最小 350px
+    height = Math.max(450, baseHeight * (0.7 + scale * 0.3)); // 最小 450px
+  } else {
+    // 放大模型时，窗口需要更大
+    width = baseWidth * (0.8 + scale * 0.5); // scale=2时约1300px
+    height = baseHeight * (0.8 + scale * 0.5);
+  }
+  
+  // 限制最大尺寸（不要超过屏幕的80%）
+  const maxWidth = window.screen.width * 0.8;
+  const maxHeight = window.screen.height * 0.8;
+  width = Math.min(width, maxWidth);
+  height = Math.min(height, maxHeight);
+  
+  // 四舍五入到整数
+  return {
+    width: Math.round(width),
+    height: Math.round(height),
+  };
 }
 
 // 创建简化的碰撞检测几何体（性能优化）
@@ -861,6 +907,37 @@ async function handleSettingsChanged(newSettings: any) {
     console.log('✓ 已更新光照:', { brightness, ambient, directional });
   }
 
+  // 更新窗口大小
+  if (newSettings.windowSize !== undefined || newSettings.scale !== undefined) {
+    try {
+      // 计算新的窗口大小
+      const windowSize = calculateWindowSize();
+      
+      // 应用窗口大小（使用 LogicalSize 实例）
+      await appWindow.setSize(new LogicalSize(windowSize.width, windowSize.height));
+      
+      console.log(`✓ 已更新窗口大小: ${windowSize.width}x${windowSize.height} (模式: ${petStore.settings.windowSize?.mode || 'auto'})`);
+      
+      // 更新窗口信息缓存（用于智能穿透）
+      if (smartClickThrough.value) {
+        try {
+          const [windowPosition, windowSizeFromApi] = await Promise.all([
+            appWindow.outerPosition(),
+            appWindow.outerSize()
+          ]);
+          cachedWindowPosition = windowPosition;
+          cachedWindowSize = windowSizeFromApi;
+          lastWindowInfoUpdate = Date.now();
+          console.log('✓ 窗口信息缓存已更新');
+        } catch (err) {
+          console.warn('⚠️ 更新窗口信息缓存失败');
+        }
+      }
+    } catch (error) {
+      console.error('❌ 更新窗口大小失败:', error);
+    }
+  }
+  
   // 更新智能穿透
   if (newSettings.smartClickThrough !== undefined) {
     smartClickThrough.value = newSettings.smartClickThrough;

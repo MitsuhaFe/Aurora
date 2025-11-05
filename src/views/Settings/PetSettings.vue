@@ -101,6 +101,73 @@
       </div>
     </div>
     
+    <!-- 窗口大小 -->
+    <div class="setting-section-title">窗口大小</div>
+    
+    <div class="setting-item">
+      <div class="setting-label">
+        <h3>大小模式</h3>
+        <p>选择自动计算或自定义窗口大小</p>
+      </div>
+      <div class="setting-control">
+        <select 
+          v-model="petStore.settings.windowSize.mode"
+          @change="handleWindowSizeModeChange"
+          class="mode-select"
+        >
+          <option value="auto">自动（根据模型缩放）</option>
+          <option value="custom">自定义大小</option>
+        </select>
+      </div>
+    </div>
+    
+    <div v-if="petStore.settings.windowSize.mode === 'custom'" class="setting-item">
+      <div class="setting-label">
+        <h3>窗口宽度</h3>
+        <p>自定义窗口宽度（像素，300-2000）</p>
+      </div>
+      <div class="setting-control">
+        <input 
+          type="range" 
+          min="300" 
+          max="2000" 
+          step="10"
+          v-model.number="petStore.settings.windowSize.width"
+          @input="handleWindowSizeChange"
+          class="slider"
+        />
+        <span class="value-display">{{ petStore.settings.windowSize.width }}px</span>
+      </div>
+    </div>
+    
+    <div v-if="petStore.settings.windowSize.mode === 'custom'" class="setting-item">
+      <div class="setting-label">
+        <h3>窗口高度</h3>
+        <p>自定义窗口高度（像素，400-2500）</p>
+      </div>
+      <div class="setting-control">
+        <input 
+          type="range" 
+          min="400" 
+          max="2500" 
+          step="10"
+          v-model.number="petStore.settings.windowSize.height"
+          @input="handleWindowSizeChange"
+          class="slider"
+        />
+        <span class="value-display">{{ petStore.settings.windowSize.height }}px</span>
+      </div>
+    </div>
+    
+    <div v-if="petStore.settings.windowSize.mode === 'auto'" class="setting-hint">
+      <div class="hint-icon">💡</div>
+      <div class="hint-text">
+        自动模式会根据模型缩放自动计算窗口大小。
+        当前缩放 {{ Number(petStore.settings.scale).toFixed(1) }}x 时，
+        窗口大小约为 {{ getAutoWindowSize().width }}x{{ getAutoWindowSize().height }} 像素。
+      </div>
+    </div>
+    
     <!-- 模型属性 -->
     <div class="setting-section-title">模型属性</div>
     
@@ -800,6 +867,71 @@ async function handleClickThroughChange() {
   }
 }
 
+// 处理窗口大小模式变化
+async function handleWindowSizeModeChange() {
+  try {
+    await petStore.updateSettings({ windowSize: petStore.settings.windowSize });
+    console.log('⚡ 窗口大小模式已更新:', petStore.settings.windowSize.mode);
+  } catch (error) {
+    console.error('更新窗口大小模式失败:', error);
+  }
+}
+
+// 处理窗口大小变化（带防抖）
+async function handleWindowSizeChange() {
+  try {
+    // 清除之前的定时器
+    if (debounceTimer !== null) {
+      clearTimeout(debounceTimer);
+    }
+    
+    // 设置新的定时器，100ms 后执行更新
+    debounceTimer = window.setTimeout(async () => {
+      try {
+        await petStore.updateSettings({ windowSize: petStore.settings.windowSize });
+        console.log('⚡ 窗口大小已更新:', petStore.settings.windowSize);
+      } catch (error) {
+        console.error('更新窗口大小失败:', error);
+      }
+      debounceTimer = null;
+    }, 100);
+  } catch (error) {
+    console.error('处理窗口大小变化失败:', error);
+  }
+}
+
+// 计算自动窗口大小（用于UI显示）
+function getAutoWindowSize(): { width: number; height: number } {
+  const scale = petStore.settings.scale;
+  
+  // 基础尺寸
+  const baseWidth = 500;
+  const baseHeight = 650;
+  
+  // 根据缩放调整窗口大小
+  let width: number;
+  let height: number;
+  
+  if (scale <= 1.0) {
+    width = Math.max(350, baseWidth * (0.7 + scale * 0.3));
+    height = Math.max(450, baseHeight * (0.7 + scale * 0.3));
+  } else {
+    width = baseWidth * (0.8 + scale * 0.5);
+    height = baseHeight * (0.8 + scale * 0.5);
+  }
+  
+  // 限制最大尺寸
+  const maxWidth = window.screen.width * 0.8;
+  const maxHeight = window.screen.height * 0.8;
+  width = Math.min(width, maxWidth);
+  height = Math.min(height, maxHeight);
+  
+  return {
+    width: Math.round(width),
+    height: Math.round(height),
+  };
+}
+
 // 处理开关变化（立即执行，用于其他开关按钮）
 async function handleToggleChange() {
   try {
@@ -1137,6 +1269,27 @@ function getFileName(filePath: string): string {
 
 .slider::-moz-range-thumb:hover {
   transform: scale(1.2);
+}
+
+.mode-select {
+  width: 220px;
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 1px solid #e5e5e7;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.mode-select:hover {
+  border-color: #667eea;
+}
+
+.mode-select:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .color-input {

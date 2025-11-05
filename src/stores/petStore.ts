@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
 import { invoke } from '@tauri-apps/api/tauri';
-import { WebviewWindow } from '@tauri-apps/api/window';
+import { WebviewWindow, LogicalSize } from '@tauri-apps/api/window';
 
 // 自定义动画项
 export interface CustomAnimation {
@@ -28,6 +28,12 @@ export interface PetSettings {
   clickThrough: boolean; // 整个窗口穿透
   smartClickThrough: boolean; // 智能穿透（仅背景穿透，模型可交互）
   showInTaskbar: boolean;
+  // 窗口大小设置
+  windowSize: {
+    mode: 'auto' | 'custom'; // 自动计算或自定义
+    width: number; // 自定义宽度（像素）
+    height: number; // 自定义高度（像素）
+  };
   animations: {
     idle: boolean;
     blink: boolean;
@@ -83,6 +89,12 @@ export const usePetStore = defineStore('pet', () => {
     clickThrough: false, // 整个窗口穿透
     smartClickThrough: true, // 智能穿透（默认启用）
     showInTaskbar: false,
+    // 窗口大小设置
+    windowSize: {
+      mode: 'auto', // 默认自动计算
+      width: 500, // 默认宽度
+      height: 650, // 默认高度
+    },
     animations: {
       idle: true,
       blink: true,
@@ -172,6 +184,18 @@ export const usePetStore = defineStore('pet', () => {
           }
         }
         
+        // 确保窗口大小设置存在（向后兼容）
+        if (!settings.value.windowSize) {
+          settings.value.windowSize = {
+            mode: 'auto',
+            width: 500,
+            height: 650,
+          };
+        } else {
+          settings.value.windowSize.width = Number(settings.value.windowSize.width) || 500;
+          settings.value.windowSize.height = Number(settings.value.windowSize.height) || 650;
+        }
+        
         console.log('✅ 已加载桌面伙伴设置:', settings.value);
       }
     } catch (error) {
@@ -186,6 +210,57 @@ export const usePetStore = defineStore('pet', () => {
       console.log('💾 桌面伙伴设置已保存');
     } catch (error) {
       console.error('❌ 保存桌面伙伴设置失败:', error);
+    }
+  }
+  
+  // 计算自动窗口大小（基于模型缩放）
+  function calculateAutoWindowSize(): { width: number; height: number } {
+    const scale = settings.value.scale;
+    
+    // 基础尺寸（适合标准大小的模型）
+    const baseWidth = 500;
+    const baseHeight = 650;
+    
+    // 根据缩放调整窗口大小
+    // 缩放 < 1.0：窗口略小一些但不要太小
+    // 缩放 > 1.0：窗口需要更大
+    let width: number;
+    let height: number;
+    
+    if (scale <= 1.0) {
+      // 缩小模型时，窗口也适当缩小，但保持最小尺寸
+      width = Math.max(350, baseWidth * (0.7 + scale * 0.3)); // 最小 350px
+      height = Math.max(450, baseHeight * (0.7 + scale * 0.3)); // 最小 450px
+    } else {
+      // 放大模型时，窗口需要更大
+      width = baseWidth * (0.8 + scale * 0.5); // scale=2时约1300px
+      height = baseHeight * (0.8 + scale * 0.5);
+    }
+    
+    // 限制最大尺寸（不要超过屏幕的80%）
+    const maxWidth = window.screen.width * 0.8;
+    const maxHeight = window.screen.height * 0.8;
+    width = Math.min(width, maxWidth);
+    height = Math.min(height, maxHeight);
+    
+    // 四舍五入到整数
+    width = Math.round(width);
+    height = Math.round(height);
+    
+    console.log(`📐 自动计算窗口大小: ${width}x${height} (缩放: ${scale})`);
+    
+    return { width, height };
+  }
+  
+  // 获取窗口大小（根据模式）
+  function getWindowSize(): { width: number; height: number } {
+    if (settings.value.windowSize.mode === 'auto') {
+      return calculateAutoWindowSize();
+    } else {
+      return {
+        width: settings.value.windowSize.width,
+        height: settings.value.windowSize.height,
+      };
     }
   }
 
@@ -210,12 +285,15 @@ export const usePetStore = defineStore('pet', () => {
         return;
       }
       
+      // 获取窗口大小
+      const windowSize = getWindowSize();
+      
       // 创建桌面伙伴窗口
       const window = new WebviewWindow('pet', {
         url: '/pet',
         title: 'Aurora Pet',
-        width: 500,
-        height: 650,
+        width: windowSize.width,
+        height: windowSize.height,
         x: settings.value.positionX,
         y: settings.value.positionY,
         decorations: false,
@@ -225,6 +303,8 @@ export const usePetStore = defineStore('pet', () => {
         resizable: false,
         focus: false,
       });
+      
+      console.log(`🪟 创建窗口大小: ${windowSize.width}x${windowSize.height} (模式: ${settings.value.windowSize.mode})`);
 
       // 等待窗口准备就绪
       await new Promise<void>((resolve, reject) => {
@@ -326,6 +406,13 @@ export const usePetStore = defineStore('pet', () => {
             y: settings.value.positionY,
           });
           console.log('✓ 已更新窗口位置:', { x: settings.value.positionX, y: settings.value.positionY });
+        }
+        
+        // 更新窗口大小（当窗口大小设置改变或缩放改变时）
+        if (newSettings.windowSize !== undefined || newSettings.scale !== undefined) {
+          const windowSize = getWindowSize();
+          await petWindowInstance.setSize(new LogicalSize(windowSize.width, windowSize.height));
+          console.log(`✓ 已更新窗口大小: ${windowSize.width}x${windowSize.height} (模式: ${settings.value.windowSize.mode})`);
         }
         
         console.log('✅ 桌面伙伴设置已即时更新');
