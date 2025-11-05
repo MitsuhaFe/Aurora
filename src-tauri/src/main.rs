@@ -280,6 +280,38 @@ fn extract_icon(_exe_path: String) -> IconResult {
     }
 }
 
+// 获取全局鼠标位置
+#[derive(Debug, Serialize, Deserialize)]
+struct CursorPosition {
+    x: f64,
+    y: f64,
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn get_cursor_position() -> Result<CursorPosition, String> {
+    use winapi::um::winuser::GetCursorPos;
+    use winapi::shared::windef::POINT;
+    
+    unsafe {
+        let mut point: POINT = std::mem::zeroed();
+        if GetCursorPos(&mut point) != 0 {
+            Ok(CursorPosition {
+                x: point.x as f64,
+                y: point.y as f64,
+            })
+        } else {
+            Err("无法获取鼠标位置".to_string())
+        }
+    }
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn get_cursor_position() -> Result<CursorPosition, String> {
+    Err("仅支持 Windows".to_string())
+}
+
 fn main() {
     let system_monitor = SystemMonitor::new();
     
@@ -287,6 +319,7 @@ fn main() {
         .manage(system_monitor)
         .invoke_handler(tauri::generate_handler![
             extract_icon,
+            get_cursor_position,
             system_info::get_system_info,
             system_info::get_disk_info,
             system_info::get_network_info

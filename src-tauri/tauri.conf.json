@@ -68,7 +68,7 @@
       },
       "fs": {
         "all": true,
-        "scope": ["$DESKTOP/**", "$PICTURES/**", "$VIDEOS/**", "$HOME/**"]
+        "scope": ["**"]
       },
       "dialog": {
         "all": true,
@@ -90,7 +90,7 @@
       "resources": []
     },
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline';"
+      "csp": null
     },
     "windows": [
       {

@@ -911,9 +911,9 @@
           </div>
         </div>
         
-        <!-- 桌宠设置 -->
+        <!-- 桌面伙伴设置 -->
         <div v-else-if="activeTab === 'pet'" class="settings-panel">
-          <p class="coming-soon">桌宠功能即将推出...</p>
+          <PetSettings />
         </div>
         
         <!-- 关于 -->
@@ -942,6 +942,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { open } from '@tauri-apps/api/dialog';
+import PetSettings from './PetSettings.vue';
 import { useWallpaperStore } from '@/stores/wallpaperStore';
 import { useDockStore } from '@/stores/dockStore';
 import { useWidgetStore } from '@/stores/widgetStore';
@@ -964,7 +965,7 @@ const menuItems: MenuItem[] = [
   { id: 'wallpaper', label: '壁纸', icon: '🖼️', description: '管理您的桌面壁纸' },
   { id: 'dock', label: 'Dock 栏', icon: '📱', description: '配置应用启动器' },
   { id: 'widgets', label: '小组件', icon: '📊', description: '添加和管理桌面小组件' },
-  { id: 'pet', label: '桌宠', icon: '🐱', description: '设置桌面宠物' },
+  { id: 'pet', label: '桌面伙伴', icon: '🐱', description: '设置桌面伙伴' },
   { id: 'about', label: '关于', icon: 'ℹ️', description: '关于 Aurora' },
 ];
 

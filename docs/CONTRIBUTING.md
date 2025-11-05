@@ -279,7 +279,7 @@ clang-format -i src/**/*.cpp src/**/*.h
 
 - `dock` - Dock 栏相关
 - `wallpaper` - 壁纸模块
-- `pet` - 桌宠模块
+- `pet` - 桌面伙伴模块
 - `widget` - 小组件
 - `ipc` - IPC 通信
 - `ui` - UI 界面

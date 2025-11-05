@@ -17,6 +17,11 @@ const routes: RouteRecordRaw[] = [
     name: 'Widget',
     component: () => import('@/views/Widgets/Index.vue'),
   },
+  {
+    path: '/pet',
+    name: 'Pet',
+    component: () => import('@/views/Pet.vue'),
+  },
 ];
 
 const router = createRouter({

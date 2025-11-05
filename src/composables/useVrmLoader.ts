@@ -3,7 +3,6 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { VRM, VRMLoaderPlugin, VRMUtils } from '@pixiv/three-vrm';
 import { VRMAnimationLoaderPlugin, VRMAnimation, createVRMAnimationClip } from '@pixiv/three-vrm-animation';
-import { MMDLoader } from 'three/examples/jsm/loaders/MMDLoader.js';
 
 export function useVrmLoader(container: HTMLElement | null) {
   // 使用 shallowRef 避免 Three.js 对象被深度代理
@@ -358,9 +357,29 @@ export function useVrmLoader(container: HTMLElement | null) {
       // 检查文件扩展名
       const ext = filePath.toLowerCase().split('.').pop();
       
-      // 支持 VRMA、GLTF、GLB、VMD
-      if (ext !== 'vrma' && ext !== 'gltf' && ext !== 'glb' && ext !== 'vmd') {
-        const errorMsg = `不支持的动画格式: .${ext}\n\n支持的格式：\n• VRMA - VRM Animation 官方格式（推荐）\n• VMD - MikuMikuDance 动画格式\n• GLTF/GLB - 通用 GLTF 动画格式\n\n如何获取：\n1. 从 VRoid Hub 下载 VRMA 动画文件\n2. 从 BowlRoll 等 MMD 站点下载 VMD 文件\n3. 使用 Blender + VRM 插件导出 VRMA\n4. 使用 Mixamo 后转换为 GLTF/GLB\n\n推荐工具：\n- Blender (免费): https://www.blender.org/\n- VRM Add-on for Blender: https://github.com/saturday06/VRM-Addon-for-Blender`;
+      // VMD 格式需要特殊处理（转换）
+      if (ext === 'vmd') {
+        const errorMsg = `VMD 格式需要转换后才能使用\n\n` +
+          `VMD 是 MikuMikuDance 的动画格式，骨骼结构与 VRM 不同，需要转换。\n\n` +
+          `📝 转换方法（推荐）：\n` +
+          `1️⃣ 使用 Blender + Cats 插件\n` +
+          `   • 安装 Blender: https://www.blender.org/\n` +
+          `   • 安装 Cats 插件: https://github.com/absolute-quantum/cats-blender-plugin\n` +
+          `   • 导入 VRM 模型和 VMD 动画\n` +
+          `   • 导出为 VRMA 或 GLB 格式\n\n` +
+          `2️⃣ 在线转换工具\n` +
+          `   • VRoid Hub 可能提供一些转换功能\n\n` +
+          `💡 或者直接使用 VRMA 格式的动画（无需转换）：\n` +
+          `   • VRoid Hub: https://hub.vroid.com/\n` +
+          `   • Booth: https://booth.pm/\n\n` +
+          `详见：《VMD动画使用指南.md》`;
+        console.error('❌', errorMsg);
+        throw new Error(errorMsg);
+      }
+      
+      // 支持 VRMA、GLTF、GLB
+      if (ext !== 'vrma' && ext !== 'gltf' && ext !== 'glb') {
+        const errorMsg = `不支持的动画格式: .${ext}\n\n支持的格式：\n• VRMA - VRM Animation 官方格式（推荐）\n• GLTF/GLB - 通用 GLTF 动画格式\n\n如何获取：\n1. VRoid Hub - 下载 VRMA 文件\n2. Mixamo - 下载后转换为 GLTF\n3. Blender - 自制动画导出\n\n推荐工具：\n- Blender: https://www.blender.org/\n- VRM Add-on: https://github.com/saturday06/VRM-Addon-for-Blender`;
         console.error('❌', errorMsg);
         throw new Error(errorMsg);
       }
@@ -368,58 +387,48 @@ export function useVrmLoader(container: HTMLElement | null) {
       // 格式特殊提示
       if (ext === 'vrma') {
         console.log('🎯 检测到 VRMA 格式（VRM Animation 官方格式）');
-      } else if (ext === 'vmd') {
-        console.log('🎵 检测到 VMD 格式（MikuMikuDance 动画）');
       }
+      
+      // 使用readBinaryFile读取文件
+      const { readBinaryFile } = await import('@tauri-apps/api/fs');
+      const fileData = await readBinaryFile(filePath);
+      // 将 Uint8Array 转换为 ArrayBuffer
+      const arrayBuffer = fileData.buffer.slice(0) as ArrayBuffer;
+      const blob = new Blob([arrayBuffer]);
+      const url = URL.createObjectURL(blob);
+      
+      // 创建加载器
+      const loader = new GLTFLoader();
+      loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
+      
+      // 加载动画
+      const gltf = await loader.loadAsync(url);
+      URL.revokeObjectURL(url);
       
       let clip: THREE.AnimationClip;
       
-      // VMD 格式需要特殊处理
-      if (ext === 'vmd') {
-        console.log('📦 开始加载 VMD 动画...');
-        clip = await loadVMDAnimation(filePath);
-      } 
-      // VRMA/GLTF/GLB 格式使用 GLTF 加载器
+      // 优先使用VRM动画数据
+      if (gltf.userData?.vrmAnimations && gltf.userData.vrmAnimations.length > 0) {
+        console.log('✅ 检测到VRM Animation格式');
+        const vrmAnimation = gltf.userData.vrmAnimations[0] as VRMAnimation;
+        clip = createVRMAnimationClip(vrmAnimation, vrm.value);
+      }
+      // 回退：尝试使用普通GLTF动画
+      else if (gltf.animations && gltf.animations.length > 0) {
+        console.warn('⚠️ 检测到普通GLTF动画，尝试应用到VRM模型...');
+        clip = gltf.animations[0];
+        
+        // 检查动画是否与模型兼容
+        if (!clip.tracks || clip.tracks.length === 0) {
+          throw new Error('动画文件中没有有效的动画轨道。');
+        }
+        
+        console.log('💡 正在使用普通GLTF动画（可能需要骨骼名称匹配）');
+      }
+      // 没有找到任何动画
       else {
-        // 使用readBinaryFile读取文件
-        const { readBinaryFile } = await import('@tauri-apps/api/fs');
-        const fileData = await readBinaryFile(filePath);
-        // 将 Uint8Array 转换为 ArrayBuffer
-        const arrayBuffer = fileData.buffer.slice(0);
-        const blob = new Blob([arrayBuffer]);
-        const url = URL.createObjectURL(blob);
-        
-        // 创建加载器
-        const loader = new GLTFLoader();
-        loader.register((parser) => new VRMAnimationLoaderPlugin(parser));
-        
-        // 加载动画
-        const gltf = await loader.loadAsync(url);
-        URL.revokeObjectURL(url);
-        
-        // 优先使用VRM动画数据
-        if (gltf.userData?.vrmAnimations && gltf.userData.vrmAnimations.length > 0) {
-          console.log('✅ 检测到VRM Animation格式');
-          const vrmAnimation = gltf.userData.vrmAnimations[0] as VRMAnimation;
-          clip = createVRMAnimationClip(vrmAnimation, vrm.value);
-        }
-        // 回退：尝试使用普通GLTF动画
-        else if (gltf.animations && gltf.animations.length > 0) {
-          console.warn('⚠️ 检测到普通GLTF动画，尝试应用到VRM模型...');
-          clip = gltf.animations[0];
-          
-          // 检查动画是否与模型兼容
-          if (!clip.tracks || clip.tracks.length === 0) {
-            throw new Error('动画文件中没有有效的动画轨道。');
-          }
-          
-          console.log('💡 正在使用普通GLTF动画（可能需要骨骼名称匹配）');
-        }
-        // 没有找到任何动画
-        else {
-          console.warn('⚠️ 文件中未找到任何动画数据');
-          throw new Error('文件中未找到动画数据，请确认文件是否正确。\n\n支持的动画类型：\n1. VRM Animation（推荐）\n2. 标准GLTF动画');
-        }
+        console.warn('⚠️ 文件中未找到任何动画数据');
+        throw new Error('文件中未找到动画数据，请确认文件是否正确。\n\n支持的动画类型：\n1. VRM Animation（推荐）\n2. 标准GLTF动画');
       }
       
       // 停止当前动画
@@ -497,192 +506,6 @@ export function useVrmLoader(container: HTMLElement | null) {
     });
     
     return expressions;
-  }
-  
-  // ========== VMD 动画加载 ==========
-  
-  // MMD 骨骼名称到 VRM 骨骼名称的映射
-  const MMD_TO_VRM_BONE_MAP: Record<string, string> = {
-    // 身体核心
-    '全ての親': 'hips',
-    'センター': 'hips',
-    '上半身': 'spine',
-    '上半身2': 'chest',
-    '下半身': 'hips',
-    '腰': 'hips',
-    
-    // 头部
-    '首': 'neck',
-    '頭': 'head',
-    
-    // 左臂
-    '左肩': 'leftShoulder',
-    '左腕': 'leftUpperArm',
-    '左ひじ': 'leftLowerArm',
-    '左手首': 'leftHand',
-    
-    // 右臂
-    '右肩': 'rightShoulder',
-    '右腕': 'rightUpperArm',
-    '右ひじ': 'rightLowerArm',
-    '右手首': 'rightHand',
-    
-    // 左腿
-    '左足': 'leftUpperLeg',
-    '左ひざ': 'leftLowerLeg',
-    '左足首': 'leftFoot',
-    
-    // 右腿
-    '右足': 'rightUpperLeg',
-    '右ひざ': 'rightLowerLeg',
-    '右足首': 'rightFoot',
-    
-    // 手指（左手）
-    '左親指０': 'leftThumbProximal',
-    '左親指１': 'leftThumbIntermediate',
-    '左親指２': 'leftThumbDistal',
-    '左人指１': 'leftIndexProximal',
-    '左人指２': 'leftIndexIntermediate',
-    '左人指３': 'leftIndexDistal',
-    '左中指１': 'leftMiddleProximal',
-    '左中指２': 'leftMiddleIntermediate',
-    '左中指３': 'leftMiddleDistal',
-    '左薬指１': 'leftRingProximal',
-    '左薬指２': 'leftRingIntermediate',
-    '左薬指３': 'leftRingDistal',
-    '左小指１': 'leftLittleProximal',
-    '左小指２': 'leftLittleIntermediate',
-    '左小指３': 'leftLittleDistal',
-    
-    // 手指（右手）
-    '右親指０': 'rightThumbProximal',
-    '右親指１': 'rightThumbIntermediate',
-    '右親指２': 'rightThumbDistal',
-    '右人指１': 'rightIndexProximal',
-    '右人指２': 'rightIndexIntermediate',
-    '右人指３': 'rightIndexDistal',
-    '右中指１': 'rightMiddleProximal',
-    '右中指２': 'rightMiddleIntermediate',
-    '右中指３': 'rightMiddleDistal',
-    '右薬指１': 'rightRingProximal',
-    '右薬指２': 'rightRingIntermediate',
-    '右薬指３': 'rightRingDistal',
-    '右小指１': 'rightLittleProximal',
-    '右小指２': 'rightLittleIntermediate',
-    '右小指３': 'rightLittleDistal',
-  };
-  
-  // 加载 VMD 动画
-  async function loadVMDAnimation(filePath: string): Promise<THREE.AnimationClip> {
-    if (!vrm.value) {
-      throw new Error('VRM 模型未加载');
-    }
-    
-    try {
-      // 读取 VMD 文件
-      const { readBinaryFile } = await import('@tauri-apps/api/fs');
-      const fileData = await readBinaryFile(filePath);
-      const arrayBuffer = fileData.buffer as ArrayBuffer;
-      const blob = new Blob([arrayBuffer]);
-      const url = URL.createObjectURL(blob);
-      
-      // 使用 MMDLoader 加载 VMD
-      const mmdLoader = new MMDLoader();
-      
-      // 加载 VMD 动画数据
-      const vmd = await new Promise<any>((resolve, reject) => {
-        mmdLoader.loadAnimation(url, null as any, (animation) => {
-          resolve(animation);
-        }, undefined, reject);
-      });
-      
-      URL.revokeObjectURL(url);
-      
-      console.log('✅ VMD 文件加载成功');
-      
-      // 转换 MMD 动画到 Three.js AnimationClip
-      const clip = convertMMDToVRM(vmd);
-      
-      return clip;
-    } catch (error) {
-      console.error('❌ 加载 VMD 动画失败:', error);
-      throw new Error('VMD 文件加载失败，请确认文件格式正确。\n\n提示：\n• 确保 VMD 文件未损坏\n• 某些复杂的 MMD 动画可能不完全兼容\n• 建议使用 Blender 转换为 VRMA 格式以获得最佳兼容性');
-    }
-  }
-  
-  // 将 MMD 动画转换为 VRM 兼容的 AnimationClip
-  function convertMMDToVRM(mmdAnimation: any): THREE.AnimationClip {
-    if (!vrm.value) {
-      throw new Error('VRM 模型未加载');
-    }
-    
-    const tracks: THREE.KeyframeTrack[] = [];
-    const humanoid = vrm.value.humanoid;
-    
-    // 处理骨骼动画
-    if (mmdAnimation && mmdAnimation.tracks) {
-      mmdAnimation.tracks.forEach((track: THREE.KeyframeTrack) => {
-        // 解析轨道名称，提取骨骼名称
-        const trackName = track.name;
-        const match = trackName.match(/^(.+)\.(position|quaternion|scale)$/);
-        
-        if (match) {
-          const mmdBoneName = match[1];
-          const property = match[2];
-          
-          // 映射 MMD 骨骼名称到 VRM 骨骼名称
-          const vrmBoneName = MMD_TO_VRM_BONE_MAP[mmdBoneName];
-          
-          if (vrmBoneName) {
-            // 获取 VRM 对应的骨骼节点
-            const bone = humanoid.getRawBoneNode(vrmBoneName as any);
-            
-            if (bone) {
-              // 创建新的轨道，使用 VRM 骨骼的名称
-              const newTrackName = `${bone.name}.${property}`;
-              
-              // 创建新轨道（复制数据）
-              let newTrack: THREE.KeyframeTrack;
-              
-              if (property === 'position') {
-                newTrack = new THREE.VectorKeyframeTrack(
-                  newTrackName,
-                  track.times,
-                  track.values
-                );
-              } else if (property === 'quaternion') {
-                newTrack = new THREE.QuaternionKeyframeTrack(
-                  newTrackName,
-                  track.times,
-                  track.values
-                );
-              } else {
-                newTrack = new THREE.VectorKeyframeTrack(
-                  newTrackName,
-                  track.times,
-                  track.values
-                );
-              }
-              
-              tracks.push(newTrack);
-              console.log(`✓ 映射骨骼: ${mmdBoneName} → ${vrmBoneName}`);
-            }
-          }
-        }
-      });
-    }
-    
-    if (tracks.length === 0) {
-      console.warn('⚠️ 未找到可映射的骨骼动画');
-      throw new Error('VMD 动画中没有找到兼容的骨骼数据。\n\n可能的原因：\n• VMD 文件使用了非标准的骨骼名称\n• 动画与 VRM 模型结构不兼容\n\n建议使用 Blender + Cats 插件转换为 VRMA 格式。');
-    }
-    
-    console.log(`✅ 成功映射 ${tracks.length} 个动画轨道`);
-    
-    // 创建 AnimationClip
-    const clip = new THREE.AnimationClip('vmd_animation', -1, tracks);
-    
-    return clip;
   }
 
   // 处理窗口大小变化

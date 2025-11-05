@@ -27,8 +27,8 @@
         
         <div class="feature-card">
           <div class="icon">🐱</div>
-          <h3>虚拟桌宠</h3>
-          <p>可爱的桌面宠物陪伴</p>
+          <h3>虚拟桌面伙伴</h3>
+          <p>可爱的桌面伙伴陪伴</p>
         </div>
       </div>
       
