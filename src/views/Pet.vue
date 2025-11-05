@@ -54,6 +54,16 @@
         </span>
       </div>
       <div class="debug-item">
+        <span class="debug-label">检测间隔:</span>
+        <span class="debug-value">{{ debugInfo.checkInterval }}ms</span>
+      </div>
+      <div class="debug-item">
+        <span class="debug-label">检测模式:</span>
+        <span :class="debugInfo.usingSimplifiedMesh ? 'debug-on' : 'debug-off'">
+          {{ debugInfo.usingSimplifiedMesh ? '⚡ 简化网格' : '🎯 精确检测' }}
+        </span>
+      </div>
+      <div class="debug-item">
         <span class="debug-label">交点数:</span>
         <span class="debug-value">{{ debugInfo.intersectCount }}</span>
       </div>
@@ -169,6 +179,9 @@ let smartClickThroughInterval: number | null = null;
 // 边界盒检测用（性能更好）
 let modelBoundingBox: THREE.Box3 | null = null;
 
+// 简化的碰撞检测几何体（用于性能优化）
+let simplifiedCollisionMesh: THREE.Mesh | null = null;
+
 // 优化 raycaster 性能
 raycaster.firstHitOnly = true; // 只检测第一个交点
 raycaster.params.Points = { threshold: 0.1 };
@@ -182,6 +195,84 @@ const WINDOW_INFO_CACHE_TIME = 1000; // 窗口信息缓存1秒
 
 // 检测节流
 let isCheckingSmartClickThrough = false;
+
+// 动态检测间隔（根据是否播放动画调整）
+let currentCheckInterval = 150; // 默认150ms
+const NORMAL_CHECK_INTERVAL = 150; // 正常检测间隔
+const ANIMATION_CHECK_INTERVAL = 400; // 播放动画时的检测间隔（大幅降低以减少卡顿）
+let isAnimationPlaying = false;
+
+// 重置简化的碰撞检测几何体
+function resetSimplifiedCollisionMesh() {
+  if (simplifiedCollisionMesh) {
+    // 从场景中移除旧的碰撞网格
+    if (simplifiedCollisionMesh.parent) {
+      simplifiedCollisionMesh.parent.remove(simplifiedCollisionMesh);
+    }
+    simplifiedCollisionMesh.geometry.dispose();
+    (simplifiedCollisionMesh.material as THREE.Material).dispose();
+    simplifiedCollisionMesh = null;
+  }
+  // 同时重置边界盒
+  modelBoundingBox = null;
+}
+
+// 创建简化的碰撞检测几何体（性能优化）
+function createSimplifiedCollisionMesh(vrm: any): THREE.Mesh {
+  // 计算模型的边界盒
+  const boundingBox = new THREE.Box3().setFromObject(vrm.scene);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+  boundingBox.getSize(size);
+  boundingBox.getCenter(center);
+  
+  // 创建一个简化的圆柱体作为碰撞体（性能更好）
+  // 高度使用边界盒高度，半径使用宽度和深度的平均值
+  const radius = (size.x + size.z) / 4;
+  const height = size.y;
+  
+  const geometry = new THREE.CylinderGeometry(radius, radius, height, 16, 1); // 只用16个分段，性能很好
+  const material = new THREE.MeshBasicMaterial({ 
+    visible: false, // 不可见
+    transparent: true,
+    opacity: 0
+  });
+  
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.position.copy(center);
+  
+  console.log('✓ 已创建简化碰撞检测几何体:', {
+    radius: radius.toFixed(2),
+    height: height.toFixed(2),
+    segments: 16
+  });
+  
+  return mesh;
+}
+
+// 更新检测间隔（根据动画状态）
+function updateCheckInterval(animationActive: boolean) {
+  if (animationActive === isAnimationPlaying) {
+    return; // 状态没变，不需要更新
+  }
+  
+  isAnimationPlaying = animationActive;
+  const newInterval = animationActive ? ANIMATION_CHECK_INTERVAL : NORMAL_CHECK_INTERVAL;
+  
+  if (newInterval !== currentCheckInterval && smartClickThroughInterval !== null) {
+    currentCheckInterval = newInterval;
+    
+    // 重启定时器以应用新的间隔
+    clearInterval(smartClickThroughInterval);
+    smartClickThroughInterval = window.setInterval(checkSmartClickThrough, currentCheckInterval);
+    
+    console.log(
+      animationActive 
+        ? `⏱️ 检测到动画播放，降低检测频率至 ${currentCheckInterval}ms` 
+        : `⏱️ 动画停止，恢复检测频率至 ${currentCheckInterval}ms`
+    );
+  }
+}
 
 // 智能穿透：定时检测鼠标是否在模型上（优化版）
 async function checkSmartClickThrough() {
@@ -229,26 +320,39 @@ async function checkSmartClickThrough() {
     mouse.x = (relativeX / cachedWindowSize.width) * 2 - 1;
     mouse.y = -(relativeY / cachedWindowSize.height) * 2 + 1;
 
-    // 首先使用边界盒进行快速粗略检测（性能开销小）
-    if (!modelBoundingBox) {
-      modelBoundingBox = new THREE.Box3().setFromObject(vrm.scene);
-    }
-    
-    // 创建射线用于边界盒检测
+    // 设置射线
     raycaster.setFromCamera(mouse, camera);
-    const ray = raycaster.ray;
-    
-    // 快速边界盒检测
-    const boxIntersection = ray.intersectBox(modelBoundingBox, new THREE.Vector3());
     
     let isOverModel = false;
     let intersects: any[] = [];
     
-    // 只有在边界盒内时才进行精确的网格检测（减少性能消耗）
-    if (boxIntersection) {
-      // 精确检测，但只检测第一个交点（firstHitOnly 已设置）
-      intersects = raycaster.intersectObject(vrm.scene, true);
+    // 如果正在播放动画，使用简化的碰撞检测几何体（性能优化）
+    if (isAnimationPlaying) {
+      // 创建或使用简化的碰撞网格
+      if (!simplifiedCollisionMesh) {
+        simplifiedCollisionMesh = createSimplifiedCollisionMesh(vrm);
+        // 将碰撞网格添加到场景中（虽然不可见）
+        vrm.scene.add(simplifiedCollisionMesh);
+      }
+      
+      // 只检测简化的碰撞网格（性能极佳）
+      intersects = raycaster.intersectObject(simplifiedCollisionMesh, false);
       isOverModel = intersects.length > 0;
+    } else {
+      // 没有播放动画时，使用边界盒 + 精确检测
+      if (!modelBoundingBox) {
+        modelBoundingBox = new THREE.Box3().setFromObject(vrm.scene);
+      }
+      
+      const ray = raycaster.ray;
+      const boxIntersection = ray.intersectBox(modelBoundingBox, new THREE.Vector3());
+      
+      // 只有在边界盒内时才进行精确的网格检测
+      if (boxIntersection) {
+        // 精确检测，但只检测第一个交点（firstHitOnly 已设置）
+        intersects = raycaster.intersectObject(vrm.scene, true);
+        isOverModel = intersects.length > 0;
+      }
     }
 
     const wasOverModel = isMouseOverModel;
@@ -262,6 +366,8 @@ async function checkSmartClickThrough() {
         isOverModel: isMouseOverModel,
         intersectCount: intersects.length,
         distance: intersects[0]?.distance || 0,
+        checkInterval: currentCheckInterval,
+        usingSimplifiedMesh: isAnimationPlaying,
       };
     }
 
@@ -292,6 +398,8 @@ const debugInfo = ref({
   isOverModel: false,
   intersectCount: 0,
   distance: 0,
+  checkInterval: 150,
+  usingSimplifiedMesh: false,
 });
 
 // 初始化
@@ -362,14 +470,28 @@ onMounted(async () => {
     }
   });
 
-  // 如果启用了智能穿透，启动定时检测（每 100ms 检测一次，降低性能消耗）
+  // 如果启用了智能穿透，启动定时检测（每 150ms 检测一次，进一步降低性能消耗）
   // 注意：使用 Tauri API 获取鼠标位置是异步的，不能太频繁
   if (smartClickThrough.value && !clickThrough.value) {
+    // 初始化窗口信息缓存
+    try {
+      const [windowPosition, windowSize] = await Promise.all([
+        appWindow.outerPosition(),
+        appWindow.outerSize()
+      ]);
+      cachedWindowPosition = windowPosition;
+      cachedWindowSize = windowSize;
+      lastWindowInfoUpdate = Date.now();
+      console.log('✓ 窗口信息缓存已初始化');
+    } catch (err) {
+      console.warn('⚠️ 初始化窗口信息缓存失败，使用默认值');
+    }
+    
     // 立即执行一次检测，确保初始状态正确
     await checkSmartClickThrough();
-    // 然后启动定时检测（100ms，减少动画卡顿）
-    smartClickThroughInterval = window.setInterval(checkSmartClickThrough, 100);
-    console.log('🎯 智能穿透检测已启动（初始化）');
+    // 然后启动定时检测（使用当前检测间隔）
+    smartClickThroughInterval = window.setInterval(checkSmartClickThrough, currentCheckInterval);
+    console.log(`🎯 智能穿透检测已启动（间隔: ${currentCheckInterval}ms）`);
   }
 
   // 调试模式快捷键（Ctrl+Shift+D）
@@ -641,18 +763,24 @@ async function loadVrmModel(path: string) {
           .then(success => {
             if (success) {
               console.log('✓ 已加载自定义动画:', animation.name);
+              
+              // 降低检测频率以减少卡顿
+              updateCheckInterval(true);
             }
           })
           .catch(error => {
             console.error('❌ 加载自定义动画失败:', error);
             // 初始化时如果动画加载失败，静默处理（不弹窗）
+            
+            // 恢复正常检测频率
+            updateCheckInterval(false);
           });
       }
     }
 
-    // 重置边界盒（模型变化后需要重新计算）
-    modelBoundingBox = null;
-    console.log('✓ 已重置边界盒缓存');
+    // 重置边界盒和碰撞网格（模型变化后需要重新计算）
+    resetSimplifiedCollisionMesh();
+    console.log('✓ 已重置边界盒和碰撞网格缓存');
     
     isLoading.value = false;
     vrmPath.value = path;
@@ -701,6 +829,7 @@ async function handleSettingsChanged(newSettings: any) {
   // 更新缩放
   if (newSettings.scale !== undefined) {
     vrmLoader.setScale(newSettings.scale);
+    resetSimplifiedCollisionMesh(); // 缩放改变后需要重置碰撞网格
     console.log('✓ 已更新缩放:', newSettings.scale);
   }
 
@@ -709,6 +838,7 @@ async function handleSettingsChanged(newSettings: any) {
     const offsetX = newSettings.modelOffsetX ?? petStore.settings.modelOffsetX;
     const offsetY = newSettings.modelOffsetY ?? petStore.settings.modelOffsetY;
     vrmLoader.setPosition(offsetX, offsetY);
+    resetSimplifiedCollisionMesh(); // 位置改变后需要重置碰撞网格
     console.log('✓ 已更新位置偏移:', { x: offsetX, y: offsetY });
   }
 
@@ -718,6 +848,7 @@ async function handleSettingsChanged(newSettings: any) {
     const rotY = newSettings.rotationY ?? petStore.settings.rotationY;
     const rotZ = newSettings.rotationZ ?? petStore.settings.rotationZ;
     vrmLoader.setRotation(rotX, rotY, rotZ);
+    resetSimplifiedCollisionMesh(); // 旋转改变后需要重置碰撞网格
     console.log('✓ 已更新旋转:', { x: rotX, y: rotY, z: rotZ });
   }
 
@@ -745,11 +876,24 @@ async function handleSettingsChanged(newSettings: any) {
     if (newSettings.smartClickThrough) {
       // 启动智能穿透
       if (smartClickThroughInterval === null) {
+        // 初始化窗口信息缓存
+        try {
+          const [windowPosition, windowSize] = await Promise.all([
+            appWindow.outerPosition(),
+            appWindow.outerSize()
+          ]);
+          cachedWindowPosition = windowPosition;
+          cachedWindowSize = windowSize;
+          lastWindowInfoUpdate = Date.now();
+        } catch (err) {
+          console.warn('⚠️ 初始化窗口信息缓存失败');
+        }
+        
         // 立即执行一次检测，确保初始状态正确
         await checkSmartClickThrough();
-        // 然后启动定时检测（100ms，减少动画卡顿）
-        smartClickThroughInterval = window.setInterval(checkSmartClickThrough, 100);
-        console.log('🎯 智能穿透检测已启动');
+        // 然后启动定时检测（使用当前检测间隔）
+        smartClickThroughInterval = window.setInterval(checkSmartClickThrough, currentCheckInterval);
+        console.log(`🎯 智能穿透检测已启动（间隔: ${currentCheckInterval}ms）`);
       }
       // 注意：不需要手动设置初始状态，checkSmartClickThrough 会自动处理
     } else {
@@ -823,6 +967,9 @@ async function handleSettingsChanged(newSettings: any) {
         // 停止当前动画
         vrmLoader.stopAnimation();
         console.log('✓ 已停止自定义动画');
+        
+        // 恢复正常检测频率
+        updateCheckInterval(false);
       } else {
         // 播放新动画
         const animation = petStore.settings.animationConfig.customAnimations.find(
@@ -834,6 +981,9 @@ async function handleSettingsChanged(newSettings: any) {
             .then(success => {
               if (success) {
                 console.log('✓ 已加载并播放自定义动画:', animation.name);
+                
+                // 降低检测频率以减少卡顿
+                updateCheckInterval(true);
               }
             })
             .catch(error => {
@@ -843,6 +993,9 @@ async function handleSettingsChanged(newSettings: any) {
               // 失败时清除当前动画
               petStore.settings.animationConfig.currentAnimation = null;
               petStore.saveSettings();
+              
+              // 恢复正常检测频率
+              updateCheckInterval(false);
             });
         }
       }
