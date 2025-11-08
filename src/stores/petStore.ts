@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { invoke } from '@tauri-apps/api/tauri';
-import { WebviewWindow, LogicalSize } from '@tauri-apps/api/window';
+import { WebviewWindow, LogicalSize, LogicalPosition } from '@tauri-apps/api/window';
 
 // 自定义动画项
 export interface CustomAnimation {
@@ -73,27 +72,29 @@ export const usePetStore = defineStore('pet', () => {
   // 是否已初始化
   const isInitialized = ref(false);
   
-  // 设置
-  const settings = ref<PetSettings>({
+  // 当前模式：'desktop' | 'fullscreen'
+  const currentMode = ref<'desktop' | 'fullscreen'>('desktop');
+  
+  // 默认设置模板（用于初始化）
+  const getDefaultSettings = (): PetSettings => ({
     enabled: false,
     vrmPath: null,
     scale: 1.0,
     positionX: window.screen.width - 400,
     positionY: window.screen.height - 500,
-    modelOffsetX: 0.0, // 默认无偏移
-    modelOffsetY: 0.0, // 默认无偏移
-    rotationX: 0, // 默认无旋转
-    rotationY: 0, // 默认无旋转（正面朝向）
-    rotationZ: 0, // 默认无旋转
+    modelOffsetX: 0.0,
+    modelOffsetY: 0.0,
+    rotationX: 0,
+    rotationY: 0,
+    rotationZ: 0,
     alwaysOnTop: true,
-    clickThrough: false, // 整个窗口穿透
-    smartClickThrough: true, // 智能穿透（默认启用）
+    clickThrough: false,
+    smartClickThrough: true,
     showInTaskbar: false,
-    // 窗口大小设置
     windowSize: {
-      mode: 'auto', // 默认自动计算
-      width: 500, // 默认宽度
-      height: 650, // 默认高度
+      mode: 'auto',
+      width: 500,
+      height: 650,
     },
     animations: {
       idle: true,
@@ -106,12 +107,12 @@ export const usePetStore = defineStore('pet', () => {
       directionalColor: '#ffffff',
     },
     background: {
-      type: 'transparent', // 默认透明背景
-      opacity: 0.0, // 完全透明
-      color: '#000000', // 默认黑色
-      imagePath: null, // 无图片
-      imageOpacity: 0.5, // 图片透明度 50%
-      imageBlur: 0, // 无模糊
+      type: 'transparent',
+      opacity: 0.0,
+      color: '#000000',
+      imagePath: null,
+      imageOpacity: 0.5,
+      imageBlur: 0,
     },
     animationConfig: {
       enableBreathing: true,
@@ -125,79 +126,145 @@ export const usePetStore = defineStore('pet', () => {
       animationSpeed: 1.0,
     },
   });
+  
+  // 桌面模式设置
+  const desktopSettings = ref<PetSettings>(getDefaultSettings());
+  
+  // 全屏模式设置（默认窗口全屏，模型居中显示）
+  const fullscreenSettings = ref<PetSettings>({
+    ...getDefaultSettings(),
+    windowSize: {
+      mode: 'custom',
+      width: window.screen.width,
+      height: window.screen.height,
+    },
+    positionX: 0,
+    positionY: 0,
+    background: {
+      type: 'color',
+      opacity: 0.3,
+      color: '#000000',
+      imagePath: null,
+      imageOpacity: 0.5,
+      imageBlur: 0,
+    },
+    scale: 1.5, // 全屏模式下模型稍大一些
+  });
+  
+  // 当前激活的设置（根据模式动态返回）
+  const settings = computed<PetSettings>({
+    get() {
+      return currentMode.value === 'desktop' ? desktopSettings.value : fullscreenSettings.value;
+    },
+    set(newValue: PetSettings) {
+      if (currentMode.value === 'desktop') {
+        desktopSettings.value = newValue;
+      } else {
+        fullscreenSettings.value = newValue;
+      }
+    }
+  });
+
+  // 规范化设置（确保所有字段类型正确）
+  function normalizeSettings(settings: PetSettings): void {
+    // 确保数值字段是数字类型
+    settings.scale = Number(settings.scale) || 1.0;
+    settings.modelOffsetX = Number(settings.modelOffsetX) || 0;
+    settings.modelOffsetY = Number(settings.modelOffsetY) || 0;
+    settings.rotationX = Number(settings.rotationX) || 0;
+    settings.rotationY = Number(settings.rotationY) || 0;
+    settings.rotationZ = Number(settings.rotationZ) || 0;
+    settings.lighting.brightness = Number(settings.lighting.brightness) || 1.0;
+    
+    // 确保背景设置存在且数值类型正确
+    if (!settings.background) {
+      settings.background = {
+        type: 'transparent',
+        opacity: 0.0,
+        color: '#000000',
+        imagePath: null,
+        imageOpacity: 0.5,
+        imageBlur: 0,
+      };
+    } else {
+      settings.background.opacity = Number(settings.background.opacity) || 0.0;
+      settings.background.imageOpacity = Number(settings.background.imageOpacity) || 0.5;
+      settings.background.imageBlur = Number(settings.background.imageBlur) || 0;
+    }
+    
+    // 确保动画配置存在且数值类型正确
+    if (!settings.animationConfig) {
+      settings.animationConfig = {
+        enableBreathing: true,
+        breathingSpeed: 1.0,
+        enableBlinking: true,
+        blinkInterval: 3.0,
+        expression: 'neutral',
+        expressionIntensity: 0.8,
+        customAnimations: [],
+        currentAnimation: null,
+        animationSpeed: 1.0,
+      };
+    } else {
+      settings.animationConfig.breathingSpeed = Number(settings.animationConfig.breathingSpeed) || 1.0;
+      settings.animationConfig.blinkInterval = Number(settings.animationConfig.blinkInterval) || 3.0;
+      settings.animationConfig.expressionIntensity = Number(settings.animationConfig.expressionIntensity) || 0.8;
+      settings.animationConfig.animationSpeed = Number(settings.animationConfig.animationSpeed) || 1.0;
+      if (!settings.animationConfig.customAnimations) {
+        settings.animationConfig.customAnimations = [];
+      }
+    }
+    
+    // 确保窗口大小设置存在
+    if (!settings.windowSize) {
+      settings.windowSize = {
+        mode: 'auto',
+        width: 500,
+        height: 650,
+      };
+    } else {
+      settings.windowSize.width = Number(settings.windowSize.width) || 500;
+      settings.windowSize.height = Number(settings.windowSize.height) || 650;
+    }
+  }
 
   // 从 localStorage 加载设置
   function loadSettings() {
     try {
-      const saved = localStorage.getItem('aurora-pet-settings');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        
-        // 合并设置，确保数值类型正确（向后兼容）
-        Object.assign(settings.value, parsed);
-        
-        // 确保数值字段是数字类型
-        settings.value.scale = Number(settings.value.scale) || 1.0;
-        settings.value.modelOffsetX = Number(settings.value.modelOffsetX) || 0;
-        settings.value.modelOffsetY = Number(settings.value.modelOffsetY) || 0;
-        settings.value.rotationX = Number(settings.value.rotationX) || 0;
-        settings.value.rotationY = Number(settings.value.rotationY) || 0;
-        settings.value.rotationZ = Number(settings.value.rotationZ) || 0;
-        settings.value.lighting.brightness = Number(settings.value.lighting.brightness) || 1.0;
-        
-        // 确保背景设置存在且数值类型正确（向后兼容）
-        if (!settings.value.background) {
-          settings.value.background = {
-            type: 'transparent',
-            opacity: 0.0,
-            color: '#000000',
-            imagePath: null,
-            imageOpacity: 0.5,
-            imageBlur: 0,
-          };
-        } else {
-          settings.value.background.opacity = Number(settings.value.background.opacity) || 0.0;
-          settings.value.background.imageOpacity = Number(settings.value.background.imageOpacity) || 0.5;
-          settings.value.background.imageBlur = Number(settings.value.background.imageBlur) || 0;
-        }
-        
-        // 确保动画配置存在且数值类型正确（向后兼容）
-        if (!settings.value.animationConfig) {
-          settings.value.animationConfig = {
-            enableBreathing: true,
-            breathingSpeed: 1.0,
-            enableBlinking: true,
-            blinkInterval: 3.0,
-            expression: 'neutral',
-            expressionIntensity: 0.8,
-            customAnimations: [],
-            currentAnimation: null,
-            animationSpeed: 1.0,
-          };
-        } else {
-          settings.value.animationConfig.breathingSpeed = Number(settings.value.animationConfig.breathingSpeed) || 1.0;
-          settings.value.animationConfig.blinkInterval = Number(settings.value.animationConfig.blinkInterval) || 3.0;
-          settings.value.animationConfig.expressionIntensity = Number(settings.value.animationConfig.expressionIntensity) || 0.8;
-          settings.value.animationConfig.animationSpeed = Number(settings.value.animationConfig.animationSpeed) || 1.0;
-          if (!settings.value.animationConfig.customAnimations) {
-            settings.value.animationConfig.customAnimations = [];
-          }
-        }
-        
-        // 确保窗口大小设置存在（向后兼容）
-        if (!settings.value.windowSize) {
-          settings.value.windowSize = {
-            mode: 'auto',
-            width: 500,
-            height: 650,
-          };
-        } else {
-          settings.value.windowSize.width = Number(settings.value.windowSize.width) || 500;
-          settings.value.windowSize.height = Number(settings.value.windowSize.height) || 650;
-        }
-        
-        console.log('✅ 已加载桌面伙伴设置:', settings.value);
+      // 加载当前模式
+      const savedMode = localStorage.getItem('aurora-pet-mode');
+      if (savedMode === 'fullscreen' || savedMode === 'desktop') {
+        currentMode.value = savedMode;
       }
+      
+      // 加载桌面模式设置
+      const savedDesktop = localStorage.getItem('aurora-pet-desktop-settings');
+      if (savedDesktop) {
+        const parsed = JSON.parse(savedDesktop);
+        Object.assign(desktopSettings.value, parsed);
+        normalizeSettings(desktopSettings.value);
+        console.log('✅ 已加载桌面模式设置');
+      } else {
+        // 向后兼容：尝试从旧的存储格式加载
+        const oldSaved = localStorage.getItem('aurora-pet-settings');
+        if (oldSaved) {
+          const parsed = JSON.parse(oldSaved);
+          Object.assign(desktopSettings.value, parsed);
+          normalizeSettings(desktopSettings.value);
+          console.log('✅ 已从旧格式迁移桌面模式设置');
+        }
+      }
+      
+      // 加载全屏模式设置
+      const savedFullscreen = localStorage.getItem('aurora-pet-fullscreen-settings');
+      if (savedFullscreen) {
+        const parsed = JSON.parse(savedFullscreen);
+        Object.assign(fullscreenSettings.value, parsed);
+        normalizeSettings(fullscreenSettings.value);
+        console.log('✅ 已加载全屏模式设置');
+      }
+      
+      console.log(`📋 当前模式: ${currentMode.value === 'desktop' ? '桌面模式' : '全屏模式'}`);
     } catch (error) {
       console.error('❌ 加载桌面伙伴设置失败:', error);
     }
@@ -206,8 +273,21 @@ export const usePetStore = defineStore('pet', () => {
   // 保存设置到 localStorage
   function saveSettings() {
     try {
-      localStorage.setItem('aurora-pet-settings', JSON.stringify(settings.value));
-      console.log('💾 桌面伙伴设置已保存');
+      // 保存当前模式
+      localStorage.setItem('aurora-pet-mode', currentMode.value);
+      
+      // 保存桌面模式设置
+      localStorage.setItem('aurora-pet-desktop-settings', JSON.stringify(desktopSettings.value));
+      
+      // 保存全屏模式设置
+      localStorage.setItem('aurora-pet-fullscreen-settings', JSON.stringify(fullscreenSettings.value));
+      
+      console.log(`💾 桌面伙伴设置已保存 (${currentMode.value === 'desktop' ? '桌面模式' : '全屏模式'})`);
+      console.log(`📦 保存的设置:`, {
+        mode: currentMode.value,
+        desktopKey: 'aurora-pet-desktop-settings',
+        fullscreenKey: 'aurora-pet-fullscreen-settings'
+      });
     } catch (error) {
       console.error('❌ 保存桌面伙伴设置失败:', error);
     }
@@ -365,7 +445,9 @@ export const usePetStore = defineStore('pet', () => {
 
   // 设置VRM模型
   async function setVrmModel(path: string) {
-    settings.value.vrmPath = path;
+    // 根据当前模式更新对应的设置对象
+    const targetSettings = currentMode.value === 'desktop' ? desktopSettings : fullscreenSettings;
+    targetSettings.value.vrmPath = path;
     saveSettings();
     
     // 如果桌面伙伴已运行，通知更新模型
@@ -376,7 +458,11 @@ export const usePetStore = defineStore('pet', () => {
 
   // 更新设置
   async function updateSettings(newSettings: Partial<PetSettings>) {
-    Object.assign(settings.value, newSettings);
+    console.log(`🔧 更新${currentMode.value === 'desktop' ? '桌面' : '全屏'}模式设置:`, newSettings);
+    
+    // 根据当前模式更新对应的设置对象
+    const targetSettings = currentMode.value === 'desktop' ? desktopSettings : fullscreenSettings;
+    Object.assign(targetSettings.value, newSettings);
     saveSettings();
 
     // 尝试获取桌面伙伴窗口（支持跨窗口调用）
@@ -385,9 +471,10 @@ export const usePetStore = defineStore('pet', () => {
     // 如果桌面伙伴窗口存在，通知更新设置
     if (petWindowInstance) {
       try {
+        console.log('🔍 准备发送事件到窗口:', petWindowInstance.label);
         // 发送设置变化通知（包含具体改变的设置）
         await petWindowInstance.emit('pet-settings-changed', newSettings);
-        console.log('📤 已发送设置变化通知到桌面伙伴窗口:', newSettings);
+        console.log('📤 事件已发送: pet-settings-changed ✓');
         
         // 更新窗口属性
         if (newSettings.alwaysOnTop !== undefined) {
@@ -400,16 +487,19 @@ export const usePetStore = defineStore('pet', () => {
           console.log('✓ 已更新任务栏显示:', newSettings.showInTaskbar);
         }
         
-        if (newSettings.positionX !== undefined || newSettings.positionY !== undefined) {
-          await petWindowInstance.setPosition({
-            x: settings.value.positionX,
-            y: settings.value.positionY,
-          });
-          console.log('✓ 已更新窗口位置:', { x: settings.value.positionX, y: settings.value.positionY });
-        }
+        // 注意：不要在这里更新窗口位置和大小
+        // 因为 handlePetSettingChange 会传递整个 settings 对象
+        // 这会导致窗口意外跳回到存储的位置
+        // 
+        // 只在以下情况更新窗口位置/大小：
+        // 1. 用户在设置中明确修改了窗口大小设置
+        // 2. 模式切换（由 switchMode 单独处理）
         
-        // 更新窗口大小（当窗口大小设置改变或缩放改变时）
-        if (newSettings.windowSize !== undefined || newSettings.scale !== undefined) {
+        // 检查是否只包含窗口大小相关的设置
+        const settingsKeys = Object.keys(newSettings);
+        const isOnlyWindowSizeUpdate = settingsKeys.length === 1 && settingsKeys[0] === 'windowSize';
+        
+        if (isOnlyWindowSizeUpdate) {
           const windowSize = getWindowSize();
           await petWindowInstance.setSize(new LogicalSize(windowSize.width, windowSize.height));
           console.log(`✓ 已更新窗口大小: ${windowSize.width}x${windowSize.height} (模式: ${settings.value.windowSize.mode})`);
@@ -424,6 +514,61 @@ export const usePetStore = defineStore('pet', () => {
     }
   }
 
+  // 切换模式
+  async function switchMode(newMode: 'desktop' | 'fullscreen') {
+    if (newMode === currentMode.value) {
+      console.log('⚠️ 已经是当前模式，无需切换');
+      return;
+    }
+    
+    console.log(`🔄 切换模式: ${currentMode.value === 'desktop' ? '桌面' : '全屏'} → ${newMode === 'desktop' ? '桌面' : '全屏'}`);
+    
+    const oldMode = currentMode.value;
+    currentMode.value = newMode;
+    
+    // 保存模式切换
+    saveSettings();
+    
+    // 获取新模式的设置
+    const newSettings = settings.value;
+    
+    // 如果桌面伙伴窗口已打开，应用新模式的所有设置
+    const petWindowInstance = petWindow.value || WebviewWindow.getByLabel('pet');
+    if (petWindowInstance) {
+      try {
+        console.log('📤 发送模式切换通知到桌面伙伴窗口');
+        
+        // 发送完整的设置到桌面伙伴窗口（触发所有设置的即时应用）
+        await petWindowInstance.emit('pet-mode-switched', {
+          mode: newMode,
+          settings: newSettings,
+        });
+        
+        // 同时更新窗口属性
+        await petWindowInstance.setAlwaysOnTop(newSettings.alwaysOnTop);
+        await petWindowInstance.setSkipTaskbar(!newSettings.showInTaskbar);
+        
+        // 更新窗口位置和大小
+        await petWindowInstance.setPosition(
+          new LogicalPosition(newSettings.positionX, newSettings.positionY)
+        );
+        
+        const windowSize = getWindowSize();
+        await petWindowInstance.setSize(new LogicalSize(windowSize.width, windowSize.height));
+        
+        console.log(`✅ 模式切换完成: ${newMode === 'desktop' ? '桌面模式' : '全屏模式'}`);
+      } catch (error) {
+        console.error('❌ 切换模式失败:', error);
+        // 如果切换失败，回滚模式
+        currentMode.value = oldMode;
+        saveSettings();
+        throw error;
+      }
+    } else {
+      console.log('ℹ️ 桌面伙伴窗口未运行，模式切换将在下次启动时生效');
+    }
+  }
+
   // 加载设置
   loadSettings();
 
@@ -434,6 +579,9 @@ export const usePetStore = defineStore('pet', () => {
 
   return {
     settings,
+    desktopSettings,
+    fullscreenSettings,
+    currentMode,
     isInitialized,
     petWindow,
     initialize,
@@ -443,6 +591,7 @@ export const usePetStore = defineStore('pet', () => {
     updateSettings,
     saveSettings,
     loadSettings,
+    switchMode,
   };
 });
 

@@ -1,5 +1,50 @@
 <template>
   <div class="pet-settings-panel">
+    <!-- 模式切换 -->
+    <div class="mode-switcher">
+      <div class="mode-header">
+        <h2>🎭 显示模式</h2>
+        <p>选择桌面伙伴的显示模式，每个模式都有独立的设置配置</p>
+      </div>
+      <div class="mode-options">
+        <div 
+          class="mode-option" 
+          :class="{ active: petStore.currentMode === 'desktop' }"
+          @click="switchToDesktopMode"
+        >
+          <div class="mode-icon">🖥️</div>
+          <div class="mode-info">
+            <h3>桌面模式</h3>
+            <p>小窗口显示在桌面上，可随意移动</p>
+          </div>
+          <div v-if="petStore.currentMode === 'desktop'" class="mode-check">✓</div>
+        </div>
+        
+        <div 
+          class="mode-option" 
+          :class="{ active: petStore.currentMode === 'fullscreen' }"
+          @click="switchToFullscreenMode"
+        >
+          <div class="mode-icon">🌟</div>
+          <div class="mode-info">
+            <h3>全屏模式</h3>
+            <p>全屏显示，提供更沉浸的体验</p>
+          </div>
+          <div v-if="petStore.currentMode === 'fullscreen'" class="mode-check">✓</div>
+        </div>
+      </div>
+      
+      <div class="mode-hint">
+        <div class="hint-icon">💡</div>
+        <div class="hint-text">
+          <strong>当前模式：</strong>{{ petStore.currentMode === 'desktop' ? '桌面模式' : '全屏模式' }}<br>
+          每个模式的设置独立保存，切换模式时会自动应用对应模式的配置
+        </div>
+      </div>
+    </div>
+    
+    <div class="setting-section-title">基础设置</div>
+    
     <!-- 启用桌面伙伴 -->
     <div class="setting-item">
       <div class="setting-label">
@@ -174,13 +219,13 @@
     <div class="setting-item">
       <div class="setting-label">
         <h3>模型缩放</h3>
-        <p>调整模型显示大小 (0.5-2.0)</p>
+        <p>调整模型显示大小 (0.2-5.0)</p>
       </div>
       <div class="setting-control">
         <input 
           type="range" 
-          min="0.5" 
-          max="2.0" 
+          min="0.2" 
+          max="5.0" 
           step="0.1"
           v-model.number="petStore.settings.scale"
           @input="handlePetSettingChange"
@@ -193,13 +238,13 @@
     <div class="setting-item">
       <div class="setting-label">
         <h3>水平位置偏移</h3>
-        <p>调整模型左右位置 (-2.0 到 2.0)</p>
+        <p>调整模型左右位置 (-5.0 到 5.0)</p>
       </div>
       <div class="setting-control">
         <input 
           type="range" 
-          min="-2.0" 
-          max="2.0" 
+          min="-5.0" 
+          max="5.0" 
           step="0.1"
           v-model.number="petStore.settings.modelOffsetX"
           @input="handlePetSettingChange"
@@ -212,13 +257,13 @@
     <div class="setting-item">
       <div class="setting-label">
         <h3>垂直位置偏移</h3>
-        <p>调整模型上下位置 (-2.0 到 2.0)</p>
+        <p>调整模型上下位置 (-5.0 到 5.0)</p>
       </div>
       <div class="setting-control">
         <input 
           type="range" 
-          min="-2.0" 
-          max="2.0" 
+          min="-5.0" 
+          max="5.0" 
           step="0.1"
           v-model.number="petStore.settings.modelOffsetY"
           @input="handlePetSettingChange"
@@ -294,13 +339,13 @@
     <div class="setting-item">
       <div class="setting-label">
         <h3>亮度</h3>
-        <p>场景光照亮度 (0.1-2.0)</p>
+        <p>场景光照亮度 (0.1-4.0)</p>
       </div>
       <div class="setting-control">
         <input 
           type="range" 
           min="0.1" 
-          max="2.0" 
+          max="4.0" 
           step="0.1"
           v-model.number="petStore.settings.lighting.brightness"
           @input="handlePetSettingChange"
@@ -726,7 +771,12 @@ onMounted(() => {
   
   // 监听 localStorage 变化（当桌面伙伴窗口修改设置时同步到主窗口）
   storageListener = (event: StorageEvent) => {
-    if (event.key === 'aurora-pet-settings' && event.newValue) {
+    // 监听桌面模式和全屏模式的设置变化
+    const isDesktopSettings = event.key === 'aurora-pet-desktop-settings';
+    const isFullscreenSettings = event.key === 'aurora-pet-fullscreen-settings';
+    const isModeChange = event.key === 'aurora-pet-mode';
+    
+    if ((isDesktopSettings || isFullscreenSettings || isModeChange) && event.newValue) {
       console.log('🔄 检测到其他窗口修改了设置，重新加载');
       petStore.loadSettings();
     }
@@ -801,7 +851,7 @@ async function selectBackgroundImage() {
     if (selected && typeof selected === 'string') {
       console.log('选择的背景图片:', selected);
       petStore.settings.background.imagePath = selected;
-      await petStore.updateSettings(petStore.settings);
+      await petStore.updateSettings({ background: petStore.settings.background });
     }
   } catch (error) {
     console.error('选择背景图片失败:', error);
@@ -813,6 +863,7 @@ async function selectBackgroundImage() {
 let debounceTimer: number | null = null;
 
 // 处理设置变化（带防抖，用于滑块等频繁触发的控件）
+// 注意：不传递整个 settings 对象，避免意外重置窗口位置
 async function handlePetSettingChange() {
   try {
     // 清除之前的定时器
@@ -823,15 +874,26 @@ async function handlePetSettingChange() {
     // 设置新的定时器，100ms 后执行更新
     debounceTimer = window.setTimeout(async () => {
       try {
-        await petStore.updateSettings(petStore.settings);
-        console.log('⚡ 桌面伙伴设置已更新');
+        console.log('🎨 准备更新设置...');
+        // 只传递模型和渲染相关的设置，不包括窗口位置
+        const updateData = {
+          scale: petStore.settings.scale,
+          modelOffsetX: petStore.settings.modelOffsetX,
+          modelOffsetY: petStore.settings.modelOffsetY,
+          rotationX: petStore.settings.rotationX,
+          rotationY: petStore.settings.rotationY,
+          rotationZ: petStore.settings.rotationZ,
+          lighting: petStore.settings.lighting,
+          background: petStore.settings.background,
+        };
+        await petStore.updateSettings(updateData);
       } catch (error) {
-        console.error('更新桌面伙伴设置失败:', error);
+        console.error('❌ 更新桌面伙伴设置失败:', error);
       }
       debounceTimer = null;
     }, 100);
   } catch (error) {
-    console.error('处理设置变化失败:', error);
+    console.error('❌ 处理设置变化失败:', error);
   }
 }
 
@@ -844,7 +906,10 @@ async function handleSmartClickThroughChange() {
       console.log('✓ 已启用智能穿透，自动关闭完全穿透');
     }
     
-    await petStore.updateSettings(petStore.settings);
+    await petStore.updateSettings({
+      smartClickThrough: petStore.settings.smartClickThrough,
+      clickThrough: petStore.settings.clickThrough
+    });
     console.log('⚡ 智能穿透设置已更新');
   } catch (error) {
     console.error('更新智能穿透设置失败:', error);
@@ -860,7 +925,10 @@ async function handleClickThroughChange() {
       console.log('✓ 已启用完全穿透，自动关闭智能穿透');
     }
     
-    await petStore.updateSettings(petStore.settings);
+    await petStore.updateSettings({
+      clickThrough: petStore.settings.clickThrough,
+      smartClickThrough: petStore.settings.smartClickThrough
+    });
     console.log('⚡ 完全穿透设置已更新');
   } catch (error) {
     console.error('更新完全穿透设置失败:', error);
@@ -935,7 +1003,10 @@ function getAutoWindowSize(): { width: number; height: number } {
 // 处理开关变化（立即执行，用于其他开关按钮）
 async function handleToggleChange() {
   try {
-    await petStore.updateSettings(petStore.settings);
+    await petStore.updateSettings({
+      alwaysOnTop: petStore.settings.alwaysOnTop,
+      showInTaskbar: petStore.settings.showInTaskbar
+    });
     console.log('⚡ 桌面伙伴开关设置已立即更新');
   } catch (error) {
     console.error('更新桌面伙伴开关设置失败:', error);
@@ -1118,11 +1189,164 @@ async function removeAnimation(animationId: string) {
 function getFileName(filePath: string): string {
   return filePath.split(/[/\\]/).pop() || filePath;
 }
+
+// ========== 模式切换函数 ==========
+
+// 切换到桌面模式
+async function switchToDesktopMode() {
+  if (petStore.currentMode === 'desktop') {
+    return;
+  }
+  
+  try {
+    await petStore.switchMode('desktop');
+    console.log('✅ 已切换到桌面模式');
+  } catch (error) {
+    console.error('❌ 切换到桌面模式失败:', error);
+    alert('切换模式失败: ' + error);
+  }
+}
+
+// 切换到全屏模式
+async function switchToFullscreenMode() {
+  if (petStore.currentMode === 'fullscreen') {
+    return;
+  }
+  
+  try {
+    await petStore.switchMode('fullscreen');
+    console.log('✅ 已切换到全屏模式');
+  } catch (error) {
+    console.error('❌ 切换到全屏模式失败:', error);
+    alert('切换模式失败: ' + error);
+  }
+}
 </script>
 
 <style scoped>
 .pet-settings-panel {
   /* 继承父级样式 */
+}
+
+/* 模式切换器样式 */
+.mode-switcher {
+  margin-bottom: 24px;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  color: white;
+}
+
+.mode-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: white;
+}
+
+.mode-header p {
+  margin: 0;
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.9);
+  line-height: 1.5;
+}
+
+.mode-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.mode-option {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  border-radius: 12px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  position: relative;
+}
+
+.mode-option:hover {
+  background: rgba(255, 255, 255, 0.25);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+}
+
+.mode-option.active {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.mode-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.mode-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mode-info h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: white;
+}
+
+.mode-info p {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.4;
+}
+
+.mode-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+  color: white;
+}
+
+.mode-hint {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mode-hint .hint-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.mode-hint .hint-text {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.mode-hint strong {
+  color: white;
+  font-weight: 600;
 }
 
 .setting-item {

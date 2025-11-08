@@ -485,7 +485,7 @@ onMounted(async () => {
   }
 
   // 监听设置变化（通过 Tauri 事件）
-  await appWindow.listen('pet-settings-changed', (event) => {
+  const unlistenSettings = await appWindow.listen('pet-settings-changed', (event) => {
     console.log('📢 收到设置变化通知:', event.payload);
     
     // 先重新加载 localStorage 中的最新设置到本地 petStore
@@ -495,10 +495,17 @@ onMounted(async () => {
     // 然后应用变化
     handleSettingsChanged(event.payload as any);
   });
+  
+  console.log('✅ pet-settings-changed 事件监听器已注册');
 
   // 监听 localStorage 变化（跨窗口同步的备用机制）
   window.addEventListener('storage', (event) => {
-    if (event.key === 'aurora-pet-settings' && event.newValue) {
+    // 监听桌面模式和全屏模式的设置变化
+    const isDesktopSettings = event.key === 'aurora-pet-desktop-settings';
+    const isFullscreenSettings = event.key === 'aurora-pet-fullscreen-settings';
+    const isModeChange = event.key === 'aurora-pet-mode';
+    
+    if ((isDesktopSettings || isFullscreenSettings || isModeChange) && event.newValue) {
       console.log('🔄 检测到 localStorage 变化，重新加载设置');
       petStore.loadSettings();
       
@@ -514,6 +521,19 @@ onMounted(async () => {
     if (payload.path) {
       loadVrmModel(payload.path);
     }
+  });
+
+  // 监听模式切换
+  await appWindow.listen('pet-mode-switched', (event) => {
+    console.log('📢 收到模式切换通知:', event.payload);
+    const payload = event.payload as { mode: string; settings: any };
+    
+    // 重新加载 petStore 设置（确保从 localStorage 获取最新数据）
+    petStore.loadSettings();
+    console.log('✓ 已从 localStorage 重新加载设置');
+    
+    // 应用新模式的所有设置（触发完整的设置更新）
+    handleSettingsChanged(payload.settings);
   });
 
   // 如果启用了智能穿透，启动定时检测（每 150ms 检测一次，进一步降低性能消耗）
@@ -907,8 +927,15 @@ async function handleSettingsChanged(newSettings: any) {
     console.log('✓ 已更新光照:', { brightness, ambient, directional });
   }
 
-  // 更新窗口大小
-  if (newSettings.windowSize !== undefined || newSettings.scale !== undefined) {
+  // 更新窗口大小（仅在明确需要时）
+  // 只在以下情况更新窗口大小：
+  // 1. 用户明确修改了 windowSize 设置
+  // 2. 在自动模式下修改了 scale（需要重新计算窗口大小）
+  const shouldUpdateWindowSize = 
+    (newSettings.windowSize !== undefined) || 
+    (newSettings.scale !== undefined && petStore.settings.windowSize?.mode === 'auto');
+  
+  if (shouldUpdateWindowSize) {
     try {
       // 计算新的窗口大小
       const windowSize = calculateWindowSize();
@@ -1392,4 +1419,5 @@ canvas {
   text-align: center;
 }
 </style>
+
 
