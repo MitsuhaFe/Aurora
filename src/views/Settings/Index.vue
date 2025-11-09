@@ -800,8 +800,8 @@
                   <label class="toggle-small">
                     <input 
                       type="checkbox" 
-                      :checked="widget.enabled"
-                      @change="toggleWidgetEnabled(widget.id, ($event.target as HTMLInputElement).checked)"
+                      v-model="widget.enabled"
+                      @change="toggleWidgetEnabled(widget.id, widget.enabled)"
                     />
                     <span></span>
                   </label>

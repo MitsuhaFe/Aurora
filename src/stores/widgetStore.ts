@@ -370,41 +370,33 @@ export const useWidgetStore = defineStore('widget', () => {
   
   /**
    * 切换小组件启用状态
-   * 参考 Dock 的实现，重新加载数据以避免使用过期的位置和大小
+   * 直接更新状态，不重新加载所有设置，避免影响其他组件的显示
    */
   async function toggleWidget(widgetId: string, enabled: boolean) {
     const widget = widgets.value.find(w => w.id === widgetId);
-    if (widget) {
-      // 🔑 关键：在切换前重新加载设置，获取最新的位置和大小
-      console.log(`🔄 [toggleWidget] 重新加载设置以获取最新位置...`);
-      loadSettings();
-      
-      // 等待加载完成
-      await new Promise(resolve => setTimeout(resolve, 150));
-      
-      // 重新获取组件（现在是最新数据）
-      const updatedWidget = widgets.value.find(w => w.id === widgetId);
-      if (!updatedWidget) {
-        console.error(`❌ 找不到小组件: ${widgetId}`);
-        return;
-      }
-      
-      updatedWidget.enabled = enabled;
-      
-      if (enabled) {
-        console.log(`📍 [toggleWidget] 使用最新位置创建窗口:`, {
-          x: updatedWidget.x,
-          y: updatedWidget.y,
-          width: updatedWidget.width,
-          height: updatedWidget.height
-        });
-        await createWidgetWindow(updatedWidget);
-      } else {
-        await closeWidgetWindow(widgetId);
-      }
-      
-      console.log(`✅ 切换小组件状态: ${widgetId} -> ${enabled ? '启用' : '禁用'}`);
+    if (!widget) {
+      console.error(`❌ 找不到小组件: ${widgetId}`);
+      return;
     }
+    
+    // 直接更新状态（v-model已经更新了，这里确保一致性）
+    widget.enabled = enabled;
+    
+    if (enabled) {
+      console.log(`📍 [toggleWidget] 启用小组件，创建窗口:`, {
+        id: widgetId,
+        x: widget.x,
+        y: widget.y,
+        width: widget.width,
+        height: widget.height
+      });
+      await createWidgetWindow(widget);
+    } else {
+      console.log(`📍 [toggleWidget] 禁用小组件，关闭窗口:`, widgetId);
+      await closeWidgetWindow(widgetId);
+    }
+    
+    console.log(`✅ 切换小组件状态: ${widgetId} -> ${enabled ? '启用' : '禁用'}`);
   }
   
   /**
