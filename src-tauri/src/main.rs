@@ -312,6 +312,175 @@ fn get_cursor_position() -> Result<CursorPosition, String> {
     Err("仅支持 Windows".to_string())
 }
 
+// 获取所有窗口信息
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct WindowInfo {
+    hwnd: usize,
+    title: String,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+    is_visible: bool,
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn get_all_windows() -> Result<Vec<WindowInfo>, String> {
+    use winapi::um::winuser::{EnumWindows, GetWindowTextW, GetWindowRect, IsWindowVisible};
+    use winapi::shared::windef::{HWND, RECT};
+    use std::mem;
+    
+    unsafe {
+        // 用于存储窗口信息的静态变量
+        static mut WINDOWS: Vec<WindowInfo> = Vec::new();
+        
+        // 枚举回调函数
+        unsafe extern "system" fn enum_callback(hwnd: HWND, _lparam: isize) -> i32 {
+            // 检查窗口是否可见
+            if IsWindowVisible(hwnd) == 0 {
+                return 1; // 继续枚举
+            }
+            
+            // 获取窗口标题
+            let mut title_buffer: [u16; 256] = [0; 256];
+            let title_len = GetWindowTextW(hwnd, title_buffer.as_mut_ptr(), 256);
+            
+            // 如果没有标题，跳过（通常是系统窗口）
+            if title_len == 0 {
+                return 1;
+            }
+            
+            let title = String::from_utf16_lossy(&title_buffer[..title_len as usize]);
+            
+            // 跳过特定的窗口
+            if title.is_empty() 
+                || title == "Program Manager" 
+                || title == "Settings"
+                || title.contains("桌面伙伴") 
+                || title.contains("Aurora") {
+                return 1;
+            }
+            
+            // 获取窗口矩形
+            let mut rect: RECT = mem::zeroed();
+            if GetWindowRect(hwnd, &mut rect) == 0 {
+                return 1;
+            }
+            
+            let width = rect.right - rect.left;
+            let height = rect.bottom - rect.top;
+            
+            // 过滤掉太小的窗口（可能是托盘图标等）
+            if width < 100 || height < 100 {
+                return 1;
+            }
+            
+            // 添加到列表
+            WINDOWS.push(WindowInfo {
+                hwnd: hwnd as usize,
+                title,
+                x: rect.left,
+                y: rect.top,
+                width,
+                height,
+                is_visible: true,
+            });
+            
+            1 // 继续枚举
+        }
+        
+        // 清空之前的数据
+        WINDOWS.clear();
+        
+        // 枚举所有窗口
+        if EnumWindows(Some(enum_callback), 0) == 0 {
+            return Err("枚举窗口失败".to_string());
+        }
+        
+        // 返回结果
+        Ok(WINDOWS.clone())
+    }
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn get_all_windows() -> Result<Vec<WindowInfo>, String> {
+    Err("仅支持 Windows".to_string())
+}
+
+// 任务栏信息结构
+#[derive(Debug, Serialize, Deserialize)]
+struct TaskbarInfo {
+    position: String, // "top", "bottom", "left", "right"
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+}
+
+#[cfg(windows)]
+#[tauri::command]
+fn get_taskbar_info() -> Result<Option<TaskbarInfo>, String> {
+    use winapi::um::winuser::{FindWindowW, GetWindowRect, GetSystemMetrics, SM_CXSCREEN, SM_CYSCREEN};
+    use winapi::shared::windef::RECT;
+    
+    unsafe {
+        // 查找任务栏窗口（类名：Shell_TrayWnd）
+        let taskbar_class: Vec<u16> = "Shell_TrayWnd\0".encode_utf16().collect();
+        let hwnd = FindWindowW(taskbar_class.as_ptr(), std::ptr::null());
+        
+        if hwnd.is_null() {
+            return Ok(None);
+        }
+        
+        // 获取任务栏窗口位置
+        let mut rect: RECT = std::mem::zeroed();
+        if GetWindowRect(hwnd, &mut rect) == 0 {
+            return Ok(None);
+        }
+        
+        let taskbar_width = rect.right - rect.left;
+        let taskbar_height = rect.bottom - rect.top;
+        
+        // 获取屏幕尺寸
+        let screen_width = GetSystemMetrics(SM_CXSCREEN);
+        let screen_height = GetSystemMetrics(SM_CYSCREEN);
+        
+        // 判断任务栏位置
+        let position = if rect.top == 0 && taskbar_height < screen_height / 2 {
+            // 任务栏在顶部
+            "top"
+        } else if rect.bottom == screen_height && taskbar_height < screen_height / 2 {
+            // 任务栏在底部
+            "bottom"
+        } else if rect.left == 0 && taskbar_width < screen_width / 2 {
+            // 任务栏在左侧
+            "left"
+        } else if rect.right == screen_width && taskbar_width < screen_width / 2 {
+            // 任务栏在右侧
+            "right"
+        } else {
+            // 默认假设在底部
+            "bottom"
+        };
+        
+        Ok(Some(TaskbarInfo {
+            position: position.to_string(),
+            x: rect.left,
+            y: rect.top,
+            width: taskbar_width,
+            height: taskbar_height,
+        }))
+    }
+}
+
+#[cfg(not(windows))]
+#[tauri::command]
+fn get_taskbar_info() -> Result<Option<TaskbarInfo>, String> {
+    Err("仅支持 Windows".to_string())
+}
+
 fn main() {
     let system_monitor = SystemMonitor::new();
     
@@ -320,6 +489,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             extract_icon,
             get_cursor_position,
+            get_all_windows,
+            get_taskbar_info,
             system_info::get_system_info,
             system_info::get_disk_info,
             system_info::get_network_info

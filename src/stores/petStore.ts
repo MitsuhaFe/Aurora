@@ -12,6 +12,35 @@ export interface CustomAnimation {
   createdAt: number;
 }
 
+// 吸附场景类型
+export type SnapSceneType = 
+  | 'taskbar-top'       // 任务栏顶部
+  | 'screen-top'        // 屏幕顶部边缘
+  | 'screen-left'       // 屏幕左侧边缘
+  | 'screen-right'      // 屏幕右侧边缘
+  | 'window-top'        // 其他窗口顶部
+  | 'idle';             // 空闲状态（默认）
+
+// 场景动画配置
+export interface SceneAnimationConfig {
+  sceneType: SnapSceneType;
+  animationId: string | null; // 对应 customAnimations 的 ID
+  enabled: boolean;
+  description: string;
+}
+
+// 吸附配置
+export interface SnapConfig {
+  enabled: boolean;                        // 是否启用吸附功能
+  snapDistance: number;                    // 吸附距离（像素）
+  snapToTaskbar: boolean;                  // 是否吸附到任务栏
+  snapToScreenEdges: boolean;              // 是否吸附到屏幕边缘
+  snapToWindows: boolean;                  // 是否吸附到其他窗口（高级功能）
+  showSnapZones: boolean;                  // 是否显示吸附区域指示
+  autoPlaySceneAnimation: boolean;         // 是否自动播放场景动画
+  sceneAnimations: SceneAnimationConfig[]; // 场景动画配置列表
+}
+
 export interface PetSettings {
   enabled: boolean;
   vrmPath: string | null;
@@ -63,6 +92,8 @@ export interface PetSettings {
     currentAnimation: string | null; // 当前播放的动画ID
     animationSpeed: number; // 动画播放速度（0.5 到 2.0）
   };
+  // 吸附配置
+  snapConfig: SnapConfig;
 }
 
 export const usePetStore = defineStore('pet', () => {
@@ -124,6 +155,23 @@ export const usePetStore = defineStore('pet', () => {
       customAnimations: [],
       currentAnimation: null,
       animationSpeed: 1.0,
+    },
+    snapConfig: {
+      enabled: false,
+      snapDistance: 50,
+      snapToTaskbar: true,
+      snapToScreenEdges: true,
+      snapToWindows: false,
+      showSnapZones: true,
+      autoPlaySceneAnimation: true,
+      sceneAnimations: [
+        { sceneType: 'taskbar-top', animationId: null, enabled: true, description: '吸附到任务栏顶部' },
+        { sceneType: 'screen-top', animationId: null, enabled: true, description: '吸附到屏幕顶部' },
+        { sceneType: 'screen-left', animationId: null, enabled: true, description: '吸附到屏幕左侧' },
+        { sceneType: 'screen-right', animationId: null, enabled: true, description: '吸附到屏幕右侧' },
+        { sceneType: 'window-top', animationId: null, enabled: true, description: '吸附到窗口顶部' },
+        { sceneType: 'idle', animationId: null, enabled: true, description: '空闲状态（默认）' },
+      ],
     },
   });
   
@@ -226,6 +274,85 @@ export const usePetStore = defineStore('pet', () => {
       settings.windowSize.width = Number(settings.windowSize.width) || 500;
       settings.windowSize.height = Number(settings.windowSize.height) || 650;
     }
+    
+    // 确保吸附配置存在（向后兼容）
+    // 有效的场景类型
+    const validSceneTypes: SnapSceneType[] = [
+      'taskbar-top',
+      'screen-top',
+      'screen-left',
+      'screen-right',
+      'window-top',
+      'idle',
+    ];
+    
+    // 场景描述映射
+    const sceneDescriptions: Record<SnapSceneType, string> = {
+      'taskbar-top': '吸附到任务栏顶部',
+      'screen-top': '吸附到屏幕顶部',
+      'screen-left': '吸附到屏幕左侧',
+      'screen-right': '吸附到屏幕右侧',
+      'window-top': '吸附到窗口顶部',
+      'idle': '空闲状态（默认）',
+    };
+    
+    if (!settings.snapConfig) {
+      settings.snapConfig = {
+        enabled: false,
+        snapDistance: 50,
+        snapToTaskbar: true,
+        snapToScreenEdges: true,
+        snapToWindows: false,
+        showSnapZones: true,
+        autoPlaySceneAnimation: true,
+        sceneAnimations: validSceneTypes.map(sceneType => ({
+          sceneType,
+          animationId: null,
+          enabled: true,
+          description: sceneDescriptions[sceneType],
+        })),
+      };
+    } else {
+      // 确保数值类型正确
+      settings.snapConfig.snapDistance = Number(settings.snapConfig.snapDistance) || 50;
+      
+      // 过滤掉已移除的场景类型，并确保所有有效场景都存在
+      if (settings.snapConfig.sceneAnimations) {
+        const originalCount = settings.snapConfig.sceneAnimations.length;
+        
+        // 过滤：只保留有效场景
+        const existingScenes = settings.snapConfig.sceneAnimations.filter(
+          scene => validSceneTypes.includes(scene.sceneType)
+        );
+        
+        // 检查缺失的场景并添加
+        const existingSceneTypes = existingScenes.map(s => s.sceneType);
+        const missingScenes = validSceneTypes
+          .filter(type => !existingSceneTypes.includes(type))
+          .map(sceneType => ({
+            sceneType,
+            animationId: null,
+            enabled: true,
+            description: sceneDescriptions[sceneType],
+          }));
+        
+        // 更新场景动画列表
+        settings.snapConfig.sceneAnimations = [...existingScenes, ...missingScenes];
+        
+        // 如果场景数量发生变化，说明有无效场景被过滤掉了
+        if (originalCount !== settings.snapConfig.sceneAnimations.length) {
+          console.log(`🧹 已清理无效场景类型，保留 ${settings.snapConfig.sceneAnimations.length} 个有效场景`);
+        }
+      } else {
+        // 如果没有场景动画配置，创建默认配置
+        settings.snapConfig.sceneAnimations = validSceneTypes.map(sceneType => ({
+          sceneType,
+          animationId: null,
+          enabled: true,
+          description: sceneDescriptions[sceneType],
+        }));
+      }
+    }
   }
 
   // 从 localStorage 加载设置
@@ -263,6 +390,9 @@ export const usePetStore = defineStore('pet', () => {
         normalizeSettings(fullscreenSettings.value);
         console.log('✅ 已加载全屏模式设置');
       }
+      
+      // 保存清理后的设置（确保已移除的场景被清除）
+      saveSettings();
       
       console.log(`📋 当前模式: ${currentMode.value === 'desktop' ? '桌面模式' : '全屏模式'}`);
     } catch (error) {

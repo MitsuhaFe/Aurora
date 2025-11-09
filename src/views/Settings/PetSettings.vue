@@ -656,32 +656,6 @@
       </div>
     </div>
     
-    <!-- 动画格式说明 -->
-    <div class="animation-format-hint">
-      <div class="hint-icon">💡</div>
-      <div class="hint-content">
-        <div class="hint-title">支持的动画格式</div>
-        <div class="hint-text">
-          <strong>直接支持：</strong><br>
-          • <strong>VRMA</strong> - VRM Animation 官方格式（最佳兼容性）⭐<br>
-          • <strong>GLTF/GLB</strong> - 通用 GLTF 动画（需骨骼匹配）<br>
-          <br>
-          <strong>需要转换：</strong><br>
-          • <strong>VMD</strong> - MMD 动画格式（需用 Blender 转换为 VRMA）<br>
-          • <strong>FBX/BVH</strong> - 其他格式（需转换为 GLTF）<br>
-          <br>
-          <strong>如何获取动画：</strong><br>
-          1️⃣ VRoid Hub - VRMA 动画（官方，推荐）<br>
-          2️⃣ Mixamo - GLTF 动画（免费角色动画库）<br>
-          3️⃣ Blender - 自制动画并导出 VRMA<br>
-          <br>
-          <strong>VMD 转换方法：</strong><br>
-          Blender + Cats 插件 → 导入 VMD → 导出 VRMA<br>
-          详见：《VMD动画使用指南.md》<br>
-        </div>
-      </div>
-    </div>
-    
     <!-- 动画列表 -->
     <div v-if="petStore.settings.animationConfig.customAnimations.length > 0" class="animation-list">
       <div 
@@ -733,6 +707,190 @@
       </div>
     </div>
     
+    <!-- 智能吸附与场景动画 -->
+    <div class="setting-section-title">🧲 智能吸附与场景动画</div>
+    
+    <div class="setting-item">
+      <div class="setting-label">
+        <h3>启用智能吸附</h3>
+        <p>拖动模型靠近任务栏或屏幕边缘时自动吸附</p>
+      </div>
+      <div class="setting-control">
+        <input 
+          type="checkbox" 
+          id="snap-enabled"
+          v-model="petStore.settings.snapConfig.enabled"
+          @change="handleSnapConfigChange"
+        />
+        <label for="snap-enabled" class="toggle"></label>
+      </div>
+    </div>
+    
+    <template v-if="petStore.settings.snapConfig.enabled">
+      <!-- 吸附距离 -->
+      <div class="setting-item">
+        <div class="setting-label">
+          <h3>吸附距离</h3>
+          <p>触发吸附的距离（像素）</p>
+        </div>
+        <div class="setting-control">
+          <input 
+            type="range" 
+            min="20" 
+            max="150" 
+            step="10"
+            v-model.number="petStore.settings.snapConfig.snapDistance"
+            @input="handleSnapConfigChange"
+            class="slider"
+          />
+          <span class="value-display">{{ petStore.settings.snapConfig.snapDistance }}px</span>
+        </div>
+      </div>
+      
+      <!-- 吸附目标 -->
+      <div class="setting-item">
+        <div class="setting-label">
+          <h3>吸附到任务栏</h3>
+          <p>允许吸附到系统任务栏</p>
+        </div>
+        <div class="setting-control">
+          <input 
+            type="checkbox" 
+            id="snap-taskbar"
+            v-model="petStore.settings.snapConfig.snapToTaskbar"
+            @change="handleSnapConfigChange"
+          />
+          <label for="snap-taskbar" class="toggle"></label>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <div class="setting-label">
+          <h3>吸附到屏幕边缘</h3>
+          <p>允许吸附到屏幕四个边缘</p>
+        </div>
+        <div class="setting-control">
+          <input 
+            type="checkbox" 
+            id="snap-edges"
+            v-model="petStore.settings.snapConfig.snapToScreenEdges"
+            @change="handleSnapConfigChange"
+          />
+          <label for="snap-edges" class="toggle"></label>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <div class="setting-label">
+          <h3>吸附到窗口</h3>
+          <p>允许吸附到其他应用程序窗口上方</p>
+        </div>
+        <div class="setting-control">
+          <input 
+            type="checkbox" 
+            id="snap-windows"
+            v-model="petStore.settings.snapConfig.snapToWindows"
+            @change="handleSnapConfigChange"
+          />
+          <label for="snap-windows" class="toggle"></label>
+        </div>
+      </div>
+      
+      <div class="setting-item">
+        <div class="setting-label">
+          <h3>显示吸附区域</h3>
+          <p>拖动时高亮显示可吸附区域（开发中）</p>
+        </div>
+        <div class="setting-control">
+          <input 
+            type="checkbox" 
+            id="show-snap-zones"
+            v-model="petStore.settings.snapConfig.showSnapZones"
+            @change="handleSnapConfigChange"
+          />
+          <label for="show-snap-zones" class="toggle"></label>
+        </div>
+      </div>
+      
+      <!-- 场景动画 -->
+      <div class="setting-item">
+        <div class="setting-label">
+          <h3>自动播放场景动画</h3>
+          <p>吸附到不同位置时自动播放对应动画</p>
+        </div>
+        <div class="setting-control">
+          <input 
+            type="checkbox" 
+            id="auto-play-scene"
+            v-model="petStore.settings.snapConfig.autoPlaySceneAnimation"
+            @change="handleSnapConfigChange"
+          />
+          <label for="auto-play-scene" class="toggle"></label>
+        </div>
+      </div>
+      
+      <!-- 场景动画配置列表 -->
+      <div v-if="petStore.settings.snapConfig.autoPlaySceneAnimation" class="scene-animations-section">
+        <div class="scene-animations-header">
+          <h3>🎬 场景动画配置</h3>
+          <p>为不同的吸附场景设置专属动画</p>
+        </div>
+        
+        <div class="scene-animations-list">
+          <div 
+            v-for="scene in petStore.settings.snapConfig.sceneAnimations" 
+            :key="scene.sceneType"
+            class="scene-animation-item"
+          >
+            <div class="scene-info">
+              <div class="scene-icon">{{ getSceneIcon(scene.sceneType) }}</div>
+              <div class="scene-details">
+                <div class="scene-name">{{ scene.description }}</div>
+                <div class="scene-animation">
+                  <span v-if="scene.animationId">
+                    {{ getAnimationName(scene.animationId) }}
+                  </span>
+                  <span v-else class="no-animation">未设置动画</span>
+                </div>
+              </div>
+            </div>
+            <div class="scene-actions">
+              <select 
+                v-model="scene.animationId"
+                @change="handleSnapConfigChange"
+                class="animation-select"
+              >
+                <option :value="null">无动画</option>
+                <option 
+                  v-for="anim in petStore.settings.animationConfig.customAnimations"
+                  :key="anim.id"
+                  :value="anim.id"
+                >
+                  {{ anim.name }}
+                </option>
+              </select>
+              <input 
+                type="checkbox"
+                :id="`scene-${scene.sceneType}`"
+                v-model="scene.enabled"
+                @change="handleSnapConfigChange"
+                class="scene-checkbox"
+              />
+              <label :for="`scene-${scene.sceneType}`" class="scene-toggle"></label>
+            </div>
+          </div>
+        </div>
+        
+        <div class="scene-animations-hint">
+          <div class="hint-icon">💡</div>
+          <div class="hint-text">
+            <strong>提示：</strong>请先添加自定义动画，然后为每个场景选择合适的动画。
+            当模型吸附到对应位置时，会自动播放设置的动画。
+          </div>
+        </div>
+      </div>
+    </template>
+    
     <!-- 使用说明 -->
     <div class="setting-section-title">使用说明</div>
     <div class="pet-tips">
@@ -751,6 +909,32 @@
       <div class="tip-item">
         <span class="tip-icon">💡</span>
         <span class="tip-text">开启点击穿透后可以点击桌面伙伴下方的内容</span>
+      </div>
+    </div>
+    
+    <!-- 动画格式说明 -->
+    <div class="animation-format-hint">
+      <div class="hint-icon">💡</div>
+      <div class="hint-content">
+        <div class="hint-title">支持的动画格式</div>
+        <div class="hint-text">
+          <strong>直接支持：</strong><br>
+          • <strong>VRMA</strong> - VRM Animation 官方格式（最佳兼容性）⭐<br>
+          • <strong>GLTF/GLB</strong> - 通用 GLTF 动画（需骨骼匹配）<br>
+          <br>
+          <strong>需要转换：</strong><br>
+          • <strong>VMD</strong> - MMD 动画格式（需用 Blender 转换为 VRMA）<br>
+          • <strong>FBX/BVH</strong> - 其他格式（需转换为 GLTF）<br>
+          <br>
+          <strong>如何获取动画：</strong><br>
+          1️⃣ VRoid Hub - VRMA 动画（官方，推荐）<br>
+          2️⃣ Mixamo - GLTF 动画（免费角色动画库）<br>
+          3️⃣ Blender - 自制动画并导出 VRMA<br>
+          <br>
+          <strong>VMD 转换方法：</strong><br>
+          Blender + Cats 插件 → 导入 VMD → 导出 VRMA<br>
+          详见：《VMD动画使用指南.md》<br>
+        </div>
       </div>
     </div>
   </div>
@@ -1188,6 +1372,41 @@ async function removeAnimation(animationId: string) {
 // 获取文件名（从完整路径提取）
 function getFileName(filePath: string): string {
   return filePath.split(/[/\\]/).pop() || filePath;
+}
+
+// ========== 智能吸附函数 ==========
+
+// 处理吸附配置变化
+async function handleSnapConfigChange() {
+  try {
+    await petStore.updateSettings({
+      snapConfig: petStore.settings.snapConfig
+    });
+    console.log('⚡ 吸附配置已更新');
+  } catch (error) {
+    console.error('更新吸附配置失败:', error);
+  }
+}
+
+// 获取场景图标
+function getSceneIcon(sceneType: string): string {
+  const iconMap: Record<string, string> = {
+    'taskbar-top': '📈',
+    'screen-top': '⬆️',
+    'screen-left': '⬅️',
+    'screen-right': '➡️',
+    'window-top': '🪟',
+    'idle': '😴',
+  };
+  return iconMap[sceneType] || '🎯';
+}
+
+// 获取动画名称
+function getAnimationName(animationId: string): string {
+  const animation = petStore.settings.animationConfig.customAnimations.find(
+    a => a.id === animationId
+  );
+  return animation ? animation.name : '未知动画';
 }
 
 // ========== 模式切换函数 ==========
@@ -1717,6 +1936,174 @@ async function switchToFullscreenMode() {
 }
 
 .hint-text strong {
+  color: #667eea;
+  font-weight: 600;
+}
+
+/* 场景动画配置样式 */
+.scene-animations-section {
+  margin-top: 20px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid #e5e5e7;
+}
+
+.scene-animations-header h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1d1d1f;
+}
+
+.scene-animations-header p {
+  margin: 0 0 16px 0;
+  font-size: 14px;
+  color: #6e6e73;
+}
+
+.scene-animations-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.scene-animation-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e5e5e7;
+  transition: all 0.2s ease;
+}
+
+.scene-animation-item:hover {
+  border-color: #667eea;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+}
+
+.scene-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+}
+
+.scene-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+}
+
+.scene-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.scene-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1d1d1f;
+  margin-bottom: 4px;
+}
+
+.scene-animation {
+  font-size: 13px;
+  color: #667eea;
+}
+
+.scene-animation .no-animation {
+  color: #999;
+  font-style: italic;
+}
+
+.scene-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.animation-select {
+  padding: 6px 12px;
+  font-size: 13px;
+  border: 1px solid #e5e5e7;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  outline: none;
+  transition: all 0.2s ease;
+  min-width: 120px;
+}
+
+.animation-select:hover {
+  border-color: #667eea;
+}
+
+.animation-select:focus {
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.scene-checkbox {
+  display: none;
+}
+
+.scene-toggle {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  background: #e5e5e7;
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+}
+
+.scene-toggle::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  border-radius: 9px;
+  background: white;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.scene-checkbox:checked + .scene-toggle {
+  background: #667eea;
+}
+
+.scene-checkbox:checked + .scene-toggle::after {
+  transform: translateX(18px);
+}
+
+.scene-animations-hint {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px;
+  background: rgba(102, 126, 234, 0.1);
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.scene-animations-hint .hint-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.scene-animations-hint .hint-text {
+  color: #1d1d1f;
+}
+
+.scene-animations-hint strong {
   color: #667eea;
   font-weight: 600;
 }

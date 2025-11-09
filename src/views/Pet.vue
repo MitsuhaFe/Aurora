@@ -25,6 +25,61 @@
     <!-- Three.js 渲染容器 -->
     <div ref="containerRef" class="render-container"></div>
 
+    <!-- 吸附视觉反馈 -->
+    <div v-if="petStore.settings.snapConfig.enabled && petStore.settings.snapConfig.showSnapZones && isDragging" class="snap-overlay">
+      <!-- 任务栏吸附区域 -->
+      <div v-if="petStore.settings.snapConfig.snapToTaskbar && taskbarInfo" 
+           class="snap-zone taskbar-zone"
+           :class="{ 
+             'active': currentScene.includes('taskbar'),
+             [`taskbar-${taskbarInfo.position}`]: true 
+           }"
+           :style="getTaskbarZoneStyle()">
+        <div class="snap-zone-label">📌 任务栏吸附区</div>
+      </div>
+      
+      <!-- 屏幕边缘吸附区域 -->
+      <div v-if="petStore.settings.snapConfig.snapToScreenEdges" class="screen-zones">
+        <!-- 顶部 -->
+        <div class="snap-zone screen-zone screen-top" 
+             :class="{ 'active': currentScene === 'screen-top' }">
+          <div class="snap-zone-label">⬆️ 顶部吸附区</div>
+        </div>
+        <!-- 左侧 -->
+        <div class="snap-zone screen-zone screen-left" 
+             :class="{ 'active': currentScene === 'screen-left' }">
+          <div class="snap-zone-label">⬅️ 左侧吸附区</div>
+        </div>
+        <!-- 右侧 -->
+        <div class="snap-zone screen-zone screen-right" 
+             :class="{ 'active': currentScene === 'screen-right' }">
+          <div class="snap-zone-label">➡️ 右侧吸附区</div>
+        </div>
+      </div>
+      
+      <!-- 窗口吸附检测区域（中心60%区域） -->
+      <div class="window-snap-detection-zone" :class="{ 'active': currentScene === 'window-top' }">
+        <div class="detection-zone-border"></div>
+        <div class="detection-zone-label">
+          🪟 窗口检测区域
+          <span v-if="snappedWindowInfo" class="detected-window">
+            {{ snappedWindowInfo.title }}
+          </span>
+        </div>
+        <div class="detection-zone-corners">
+          <div class="corner corner-tl"></div>
+          <div class="corner corner-tr"></div>
+          <div class="corner corner-bl"></div>
+          <div class="corner corner-br"></div>
+        </div>
+      </div>
+      
+      <!-- 吸附状态提示 -->
+      <div v-if="isSnapped" class="snap-indicator">
+        🧲 已吸附: {{ getSceneName(currentScene) }}
+      </div>
+    </div>
+
     <!-- 右键菜单 -->
     <div
       v-if="contextMenuVisible"
@@ -77,7 +132,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
+import { ref, onMounted, onUnmounted, watch, computed, nextTick } from 'vue';
 import { appWindow, LogicalSize } from '@tauri-apps/api/window';
 import { readBinaryFile } from '@tauri-apps/api/fs';
 import { invoke, convertFileSrc } from '@tauri-apps/api/tauri';
@@ -102,7 +157,46 @@ const contextMenuY = ref(0);
 // VRM加载器
 let vrmLoader: ReturnType<typeof useVrmLoader> | null = null;
 
-// 背景样式计算
+// ========== 智能吸附相关 ==========
+import type { SnapSceneType } from '@/stores/petStore';
+
+// 吸附状态
+const isSnapped = ref(false);
+const currentScene = ref<SnapSceneType>('idle');
+const isDragging = ref(false);
+
+// 任务栏信息（Windows）
+interface TaskbarInfo {
+  position: 'top' | 'bottom' | 'left' | 'right';
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+// 其他窗口信息
+interface WindowInfo {
+  hwnd: number;
+  title: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  is_visible: boolean;
+}
+
+let taskbarInfo: TaskbarInfo | null = null;
+let otherWindows: WindowInfo[] = [];
+let lastWindowsUpdate = 0;
+const WINDOWS_CACHE_TIME = 500; // 窗口信息缓存500ms（频繁更新以提高响应）
+
+// 吸附区域检测间隔
+let snapCheckInterval: number | null = null;
+
+// 当前吸附的窗口信息（响应式）
+const snappedWindowInfo = ref<WindowInfo | null>(null);
+
+// ========== 背景样式计算 ==========
 const backgroundStyle = computed(() => {
   try {
     const bg = petStore.settings?.background;
@@ -196,11 +290,18 @@ const WINDOW_INFO_CACHE_TIME = 1000; // 窗口信息缓存1秒
 // 检测节流
 let isCheckingSmartClickThrough = false;
 
+// 鼠标位置缓存（用于检测鼠标是否移动，优化性能）
+let lastMouseX = -999;
+let lastMouseY = -999;
+const MOUSE_MOVE_THRESHOLD = 3; // 鼠标移动阈值（像素），减少微小移动的检测
+
 // 动态检测间隔（根据是否播放动画调整）
 let currentCheckInterval = 150; // 默认150ms
 const NORMAL_CHECK_INTERVAL = 150; // 正常检测间隔
 const ANIMATION_CHECK_INTERVAL = 400; // 播放动画时的检测间隔（大幅降低以减少卡顿）
+const SCENE_ANIMATION_CHECK_INTERVAL = 800; // 场景动画时的检测间隔（极低频率，避免卡顿）
 let isAnimationPlaying = false;
+let isPlayingSceneAnimation = false; // 是否正在播放场景动画
 
 // 重置简化的碰撞检测几何体
 function resetSimplifiedCollisionMesh() {
@@ -272,38 +373,58 @@ function createSimplifiedCollisionMesh(vrm: any): THREE.Mesh {
   boundingBox.getSize(size);
   boundingBox.getCenter(center);
   
-  // 创建一个简化的圆柱体作为碰撞体（性能更好）
-  // 高度使用边界盒高度，半径使用宽度和深度的平均值
+  // 创建一个极简的圆柱体作为碰撞体（性能优先）
+  // 使用极少的分段数来提升 raycasting 性能
   const radius = (size.x + size.z) / 4;
   const height = size.y;
   
-  const geometry = new THREE.CylinderGeometry(radius, radius, height, 16, 1); // 只用16个分段，性能很好
+  // 使用 8 个分段（足够精确，性能极佳）
+  const geometry = new THREE.CylinderGeometry(radius, radius, height, 8, 1);
   const material = new THREE.MeshBasicMaterial({ 
-    visible: false, // 不可见
+    visible: false,
     transparent: true,
-    opacity: 0
+    opacity: 0,
+    depthTest: false,  // 禁用深度测试，提升性能
+    depthWrite: false  // 禁用深度写入，提升性能
   });
   
   const mesh = new THREE.Mesh(geometry, material);
   mesh.position.copy(center);
   
-  console.log('✓ 已创建简化碰撞检测几何体:', {
+  // 设置渲染顺序，确保在其他对象之后（但不参与实际渲染）
+  mesh.renderOrder = -1;
+  
+  console.log('✓ 已创建极简碰撞检测几何体（圆柱体）:', {
     radius: radius.toFixed(2),
     height: height.toFixed(2),
-    segments: 16
+    segments: 8,
+    优化: 'depthTest=false, depthWrite=false'
   });
   
   return mesh;
 }
 
-// 更新检测间隔（根据动画状态）
-function updateCheckInterval(animationActive: boolean) {
-  if (animationActive === isAnimationPlaying) {
+// 更新检测间隔（根据动画状态和类型）
+function updateCheckInterval(animationActive: boolean, isSceneAnimation: boolean = false) {
+  // 检查状态是否变化
+  const stateChanged = (animationActive !== isAnimationPlaying) || (isSceneAnimation !== isPlayingSceneAnimation);
+  
+  if (!stateChanged) {
     return; // 状态没变，不需要更新
   }
   
   isAnimationPlaying = animationActive;
-  const newInterval = animationActive ? ANIMATION_CHECK_INTERVAL : NORMAL_CHECK_INTERVAL;
+  isPlayingSceneAnimation = isSceneAnimation;
+  
+  // 根据动画类型选择检测间隔
+  let newInterval = NORMAL_CHECK_INTERVAL;
+  if (isSceneAnimation) {
+    // 场景动画（吸附动画）：极低频率，大幅减少卡顿
+    newInterval = SCENE_ANIMATION_CHECK_INTERVAL;
+  } else if (animationActive) {
+    // 普通自定义动画：中等频率
+    newInterval = ANIMATION_CHECK_INTERVAL;
+  }
   
   if (newInterval !== currentCheckInterval && smartClickThroughInterval !== null) {
     currentCheckInterval = newInterval;
@@ -313,7 +434,9 @@ function updateCheckInterval(animationActive: boolean) {
     smartClickThroughInterval = window.setInterval(checkSmartClickThrough, currentCheckInterval);
     
     console.log(
-      animationActive 
+      isSceneAnimation 
+        ? `⏱️ 场景动画播放中，大幅降低检测频率至 ${currentCheckInterval}ms` 
+        : animationActive 
         ? `⏱️ 检测到动画播放，降低检测频率至 ${currentCheckInterval}ms` 
         : `⏱️ 动画停止，恢复检测频率至 ${currentCheckInterval}ms`
     );
@@ -345,6 +468,20 @@ async function checkSmartClickThrough() {
   try {
     // 获取鼠标的屏幕坐标（使用 Rust 后端，即使窗口穿透也能获取）
     const cursorPosition = await invoke<{ x: number; y: number }>('get_cursor_position');
+    
+    // 优化：检查鼠标是否移动（如果鼠标静止，跳过检测）
+    const mouseMoveX = Math.abs(cursorPosition.x - lastMouseX);
+    const mouseMoveY = Math.abs(cursorPosition.y - lastMouseY);
+    
+    if (mouseMoveX < MOUSE_MOVE_THRESHOLD && mouseMoveY < MOUSE_MOVE_THRESHOLD) {
+      // 鼠标几乎没有移动，跳过本次检测以节省性能
+      isCheckingSmartClickThrough = false;
+      return;
+    }
+    
+    // 更新鼠标位置缓存
+    lastMouseX = cursorPosition.x;
+    lastMouseY = cursorPosition.y;
     
     // 更新窗口信息缓存（每秒最多更新一次）
     const now = Date.now();
@@ -457,6 +594,20 @@ onMounted(async () => {
   vrmPath.value = petStore.settings.vrmPath;
   clickThrough.value = petStore.settings.clickThrough;
   smartClickThrough.value = petStore.settings.smartClickThrough;
+  
+  // 初始化任务栏信息（用于吸附功能）
+  if (petStore.settings.snapConfig.enabled) {
+    // 输出 DPI 缩放信息
+    const dpiScale = window.devicePixelRatio || 1;
+    console.log(`🖥️ 屏幕信息 - DPI缩放: ${dpiScale}x (${Math.round(dpiScale * 100)}%)`);
+    console.log(`🖥️ 逻辑分辨率: ${window.screen.width}x${window.screen.height}`);
+    console.log(`🖥️ 物理分辨率: ${window.screen.width * dpiScale}x${window.screen.height * dpiScale}`);
+    
+    taskbarInfo = await detectTaskbar();
+    if (taskbarInfo) {
+      console.log('✅ 任务栏信息:', taskbarInfo);
+    }
+  }
 
   // 设置窗口属性
   if (clickThrough.value) {
@@ -679,10 +830,59 @@ onMounted(async () => {
     petWindowEl,
   };
 
-  // 窗口拖动
-  let isDragging = false;
-  let startX = 0;
-  let startY = 0;
+  // 窗口拖动（集成吸附功能）
+  let dragStartX = 0;
+  let dragStartY = 0;
+  let dragStartTime = 0;
+  let dragTimeoutCheckInterval: number | null = null;
+  let dragTimeoutHandled = false; // 标记是否已经处理过超时
+
+  // 停止拖动的统一处理函数（立即隐藏吸附区域）
+  let blurTimeout: number | null = null;
+  
+  const stopDragging = async () => {
+    if (!isDragging.value) {
+      return; // 已经停止，避免重复处理
+    }
+    
+    console.log('🛑 停止拖动，立即隐藏吸附区域');
+    
+    // 第一步：立即设置为 false，触发 Vue 响应式更新，立即隐藏吸附区域
+    isDragging.value = false;
+    
+    // 重置超时处理标志
+    dragTimeoutHandled = false;
+    
+    // 第二步：停止吸附检测定时器
+    stopSnapDetection();
+    
+    // 清除拖动超时检查
+    if (dragTimeoutCheckInterval !== null) {
+      clearInterval(dragTimeoutCheckInterval);
+      dragTimeoutCheckInterval = null;
+    }
+    
+    // 清除失焦延迟检查
+    if (blurTimeout !== null) {
+      clearTimeout(blurTimeout);
+      blurTimeout = null;
+    }
+    
+    // 第三步：等待下一个 tick，确保 UI 已更新，然后在后台执行最后的吸附检查
+    await nextTick();
+    
+    // 拖动结束时执行最后一次吸附检查（不阻塞 UI）
+    if (petStore.settings.snapConfig.enabled) {
+      const finalScene = await detectSnapScene();
+      if (finalScene !== 'idle' && finalScene !== currentScene.value) {
+        currentScene.value = finalScene;
+        await applySnap(finalScene);
+        await playSceneAnimation(finalScene);
+      }
+    }
+    
+    console.log('✅ 拖动已完全停止');
+  };
 
   containerRef.value?.addEventListener('mousedown', (e) => {
     // 拖动条件：
@@ -692,21 +892,133 @@ onMounted(async () => {
     const canDrag = !clickThrough.value && e.button === 0 && (!smartClickThrough.value || isMouseOverModel);
     
     if (canDrag) {
-      isDragging = true;
-      startX = e.screenX;
-      startY = e.screenY;
+      console.log('🖱️ 开始拖动，显示吸附区域');
+      isDragging.value = true;
+      dragStartX = e.screenX;
+      dragStartY = e.screenY;
+      dragStartTime = Date.now();
+      dragTimeoutHandled = false; // 重置超时处理标志
+      
+      // 启动吸附检测
+      if (petStore.settings.snapConfig.enabled) {
+        startSnapDetection();
+      }
+      
+      // 启动超时保护：每500ms检查一次，如果拖动超过3秒强制停止
+      dragTimeoutCheckInterval = window.setInterval(() => {
+        // 如果已经停止拖动，清除定时器并返回
+        if (!isDragging.value) {
+          if (dragTimeoutCheckInterval !== null) {
+            clearInterval(dragTimeoutCheckInterval);
+            dragTimeoutCheckInterval = null;
+          }
+          return;
+        }
+        
+        // 如果已经处理过超时，不再重复处理
+        if (dragTimeoutHandled) {
+          return;
+        }
+        
+        const dragDuration = Date.now() - dragStartTime;
+        if (dragDuration > 3000) {
+          // 标记为已处理，避免重复输出日志
+          dragTimeoutHandled = true;
+          
+          console.warn('⚠️ 拖动超时（3秒），强制停止');
+          
+          // 先清除定时器，避免重复触发
+          if (dragTimeoutCheckInterval !== null) {
+            clearInterval(dragTimeoutCheckInterval);
+            dragTimeoutCheckInterval = null;
+          }
+          
+          // 然后停止拖动
+          stopDragging();
+        }
+      }, 500);
+      
       appWindow.startDragging();
     }
   });
 
-  document.addEventListener('mouseup', () => {
-    isDragging = false;
-  });
+  // 监听器 1: document 的 mouseup（主要监听点）
+  const handleDocumentMouseUp = (e: MouseEvent) => {
+    if (isDragging.value) {
+      // 只有左键松开才算结束拖动
+      if (e.button === 0) {
+        console.log('📍 document mouseup (左键) - 停止拖动');
+        stopDragging();
+      }
+    }
+  };
+  document.addEventListener('mouseup', handleDocumentMouseUp);
+
+  // 监听器 2: window 的 mouseup（全局捕获，作为备份）
+  const handleWindowMouseUp = (e: MouseEvent) => {
+    if (isDragging.value && e.button === 0) {
+      console.log('📍 window mouseup (左键) - 停止拖动');
+      stopDragging();
+    }
+  };
+  window.addEventListener('mouseup', handleWindowMouseUp, true); // 使用捕获阶段
+
+  // 监听器 3: 窗口失焦（只在真正失焦时处理，延迟检查避免误触发）
+  const handleWindowBlurDrag = () => {
+    if (!isDragging.value) return;
+    
+    // 延迟300ms检查，避免短暂失焦导致误触发
+    blurTimeout = window.setTimeout(() => {
+      if (isDragging.value) {
+        console.log('📍 窗口失焦（延迟确认）- 停止拖动');
+        stopDragging();
+      }
+    }, 300);
+  };
+  
+  // 窗口重新聚焦时取消失焦处理
+  const handleWindowFocusDrag = () => {
+    if (blurTimeout !== null) {
+      clearTimeout(blurTimeout);
+      blurTimeout = null;
+      console.log('✓ 窗口重新聚焦，取消失焦处理');
+    }
+  };
+  
+  window.addEventListener('blur', handleWindowBlurDrag);
+  window.addEventListener('focus', handleWindowFocusDrag);
+
+  // 存储清理函数
+  (window as any)._petDragCleanup = () => {
+    document.removeEventListener('mouseup', handleDocumentMouseUp);
+    window.removeEventListener('mouseup', handleWindowMouseUp, true);
+    window.removeEventListener('blur', handleWindowBlurDrag);
+    window.removeEventListener('focus', handleWindowFocusDrag);
+    if (blurTimeout !== null) {
+      clearTimeout(blurTimeout);
+      blurTimeout = null;
+    }
+    if (dragTimeoutCheckInterval !== null) {
+      clearInterval(dragTimeoutCheckInterval);
+      dragTimeoutCheckInterval = null;
+    }
+    console.log('✓ 已移除拖动监听器');
+  };
 });
 
 onUnmounted(() => {
   console.log('👋 桌面伙伴窗口卸载');
   window.removeEventListener('resize', handleResize);
+  
+  // 清理吸附检测
+  stopSnapDetection();
+  
+  // 清理拖动事件监听器
+  const dragCleanup = (window as any)._petDragCleanup;
+  if (dragCleanup) {
+    dragCleanup();
+    delete (window as any)._petDragCleanup;
+  }
   
   // 清理右键菜单事件监听器
   const handlers = (window as any)._petMenuEventHandlers;
@@ -1112,6 +1424,27 @@ async function handleSettingsChanged(newSettings: any) {
     }
   }
   
+  // 更新吸附配置
+  if (newSettings.snapConfig !== undefined) {
+    // 如果吸附功能状态改变，需要初始化或清理
+    if (newSettings.snapConfig.enabled !== undefined) {
+      if (newSettings.snapConfig.enabled) {
+        // 启用吸附：初始化任务栏信息
+        taskbarInfo = await detectTaskbar();
+        if (taskbarInfo) {
+          console.log('✓ 任务栏信息已更新:', taskbarInfo);
+        }
+      } else {
+        // 禁用吸附：停止检测
+        stopSnapDetection();
+        isSnapped.value = false;
+        currentScene.value = 'idle';
+        console.log('✓ 吸附功能已禁用');
+      }
+    }
+    console.log('✓ 已更新吸附配置');
+  }
+  
   console.log('✅ 设置即时更新完成');
 }
 
@@ -1163,6 +1496,586 @@ async function toggleClickThrough() {
 async function closePet() {
   await petStore.close();
 }
+
+// ========== 智能吸附功能 ==========
+
+// 获取所有窗口信息
+async function getAllWindows(): Promise<WindowInfo[]> {
+  try {
+    const windows = await invoke<WindowInfo[]>('get_all_windows');
+    return windows;
+  } catch (error) {
+    console.error('获取窗口列表失败:', error);
+    return [];
+  }
+}
+
+// 获取任务栏信息（使用 Windows API）
+async function detectTaskbar(): Promise<TaskbarInfo | null> {
+  try {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔍 任务栏检测调试信息 (Taskbar Detection Debug):');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    // 使用 Rust 后端直接获取任务栏信息
+    const taskbarInfo = await invoke<{
+      position: string;
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    } | null>('get_taskbar_info');
+    
+    if (!taskbarInfo) {
+      console.warn('⚠️ 无法通过 Windows API 获取任务栏信息');
+      console.warn('   这可能是因为任务栏是自动隐藏的，或者系统配置特殊');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      return null;
+    }
+    
+    // 获取屏幕尺寸（考虑 DPI 缩放）
+    const dpiScale = window.devicePixelRatio || 1;
+    const screenWidth = window.screen.width * dpiScale;
+    const screenHeight = window.screen.height * dpiScale;
+    
+    console.log('📐 屏幕信息 (Screen Info):');
+    console.log(`    - DPI 缩放: ${dpiScale}x (${Math.round(dpiScale * 100)}%)`);
+    console.log(`    - 逻辑分辨率: ${window.screen.width}x${window.screen.height}`);
+    console.log(`    - 物理分辨率: ${screenWidth}x${screenHeight}`);
+    
+    console.log('');
+    console.log('📊 任务栏检测结果 (通过 Windows API):');
+    console.log(`    - 位置: ${taskbarInfo.position}`);
+    console.log(`    - 坐标: (${taskbarInfo.x}, ${taskbarInfo.y})`);
+    console.log(`    - 大小: ${taskbarInfo.width}x${taskbarInfo.height}`);
+    
+    // 转换位置类型
+    const position = taskbarInfo.position as 'top' | 'bottom' | 'left' | 'right';
+    
+    // 注意：Windows API 返回的坐标是逻辑像素，需要考虑 DPI 缩放
+    // 但任务栏窗口的坐标已经是屏幕坐标，不需要额外缩放
+    const result: TaskbarInfo = {
+      position,
+      x: taskbarInfo.x,
+      y: taskbarInfo.y,
+      width: taskbarInfo.width,
+      height: taskbarInfo.height,
+    };
+    
+    console.log('');
+    console.log('🎯 最终任务栏区域:');
+    console.log(`    - 位置: ${result.position}`);
+    console.log(`    - X: ${result.x} px`);
+    console.log(`    - Y: ${result.y} px`);
+    console.log(`    - 宽度: ${result.width} px`);
+    console.log(`    - 高度: ${result.height} px`);
+    
+    if (result.position === 'bottom') {
+      console.log(`    - 任务栏顶部位置: ${result.y} px`);
+      console.log(`    - 任务栏底部位置: ${result.y + result.height} px`);
+    } else if (result.position === 'top') {
+      console.log(`    - 任务栏顶部位置: ${result.y} px`);
+      console.log(`    - 任务栏底部位置: ${result.y + result.height} px`);
+    }
+    
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    // 验证任务栏信息是否有效
+    if (result.width === 0 || result.height === 0) {
+      console.warn('⚠️ 任务栏信息无效（宽度或高度为0）');
+      return null;
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('❌ 检测任务栏失败:', error);
+    return null;
+  }
+}
+
+// 检测吸附场景
+async function detectSnapScene(): Promise<SnapSceneType> {
+  console.log('\n🔍 ========== 开始检测吸附场景 ==========');
+  
+  if (!petStore.settings.snapConfig.enabled) {
+    console.log('❌ 吸附功能未启用，返回 idle');
+    return 'idle';
+  }
+  
+  try {
+    // 获取窗口位置
+    const windowPos = await appWindow.outerPosition();
+    const windowSize = await appWindow.outerSize();
+    
+    const snapDistance = petStore.settings.snapConfig.snapDistance;
+    // 获取屏幕尺寸（考虑 DPI 缩放）
+    const dpiScale = window.devicePixelRatio || 1;
+    const screenWidth = window.screen.width * dpiScale;
+    const screenHeight = window.screen.height * dpiScale;
+    
+    console.log('📐 基础信息:');
+    console.log(`    - DPI 缩放: ${dpiScale}x`);
+    console.log(`    - 屏幕尺寸: ${screenWidth}x${screenHeight} (物理像素)`);
+    console.log(`    - 窗口位置: (${windowPos.x}, ${windowPos.y})`);
+    console.log(`    - 窗口大小: ${windowSize.width}x${windowSize.height}`);
+    console.log(`    - 吸附距离阈值: ${snapDistance} px`);
+    console.log(`    - 吸附到任务栏: ${petStore.settings.snapConfig.snapToTaskbar ? '✅' : '❌'}`);
+    console.log(`    - 吸附到屏幕边缘: ${petStore.settings.snapConfig.snapToScreenEdges ? '✅' : '❌'}`);
+    console.log(`    - 吸附到窗口: ${petStore.settings.snapConfig.snapToWindows ? '✅' : '❌'}`);
+    console.log(`    - 任务栏信息: ${taskbarInfo ? '✅ 已检测' : '❌ 未检测'}`);
+    
+    // 窗口中心点
+    const windowCenterX = windowPos.x + windowSize.width / 2;
+    const windowCenterY = windowPos.y + windowSize.height / 2;
+    
+    // 检测任务栏吸附（检测任务栏的顶部边缘）
+    if (petStore.settings.snapConfig.snapToTaskbar) {
+      console.log('\n🧲 ========== 任务栏吸附检测 ==========');
+      
+      if (!taskbarInfo) {
+        console.log('❌ 任务栏信息为空，跳过任务栏检测');
+      } else {
+        const tb = taskbarInfo;
+        console.log('📊 任务栏信息:');
+        console.log(`    - 位置: ${tb.position}`);
+        console.log(`    - 坐标: (${tb.x}, ${tb.y})`);
+        console.log(`    - 大小: ${tb.width}x${tb.height}`);
+        console.log(`    - 顶部: ${tb.y} px`);
+        console.log(`    - 底部: ${tb.y + tb.height} px`);
+        
+        // 桌面伙伴窗口位置
+        const windowTop = windowPos.y;
+        const windowBottom = windowPos.y + windowSize.height;
+        
+        let targetSnapPosition: number;
+        let distanceFromTaskbar: number;
+        let snapDescription: string;
+        
+        if (tb.position === 'top') {
+          // 任务栏在顶部：检测窗口顶部是否靠近任务栏底部
+          targetSnapPosition = tb.y + tb.height; // 任务栏底部位置
+          distanceFromTaskbar = Math.abs(windowTop - targetSnapPosition);
+          snapDescription = '窗口顶部紧贴任务栏底部';
+          
+          console.log('\n📏 距离计算（任务栏在顶部）:');
+          console.log(`    - 任务栏顶部: ${tb.y} px`);
+          console.log(`    - 任务栏底部: ${targetSnapPosition} px`);
+          console.log(`    - 窗口顶部: ${windowTop} px`);
+          console.log(`    - 窗口底部: ${windowBottom} px`);
+          console.log(`    - 目标吸附位置: ${targetSnapPosition} px (${snapDescription})`);
+        } else if (tb.position === 'bottom') {
+          // 任务栏在底部：检测窗口底部是否靠近任务栏顶部
+          targetSnapPosition = tb.y; // 任务栏顶部位置
+          distanceFromTaskbar = Math.abs(windowBottom - targetSnapPosition);
+          snapDescription = '窗口底部紧贴任务栏顶部';
+          
+          console.log('\n📏 距离计算（任务栏在底部）:');
+          console.log(`    - 任务栏顶部: ${targetSnapPosition} px`);
+          console.log(`    - 任务栏底部: ${tb.y + tb.height} px`);
+          console.log(`    - 窗口顶部: ${windowTop} px`);
+          console.log(`    - 窗口底部: ${windowBottom} px`);
+          console.log(`    - 目标吸附位置: ${targetSnapPosition} px (${snapDescription})`);
+        } else {
+          // 任务栏在左侧或右侧，暂不支持
+          console.log(`⚠️ 任务栏位置是 ${tb.position}，暂不支持该位置的吸附检测`);
+          return 'idle';
+        }
+        
+        console.log(`    - 当前距离: ${distanceFromTaskbar} px`);
+        console.log(`    - 吸附阈值: ${snapDistance} px`);
+        
+        const isWithinSnapDistance = distanceFromTaskbar < snapDistance;
+        console.log(`    - 是否在吸附范围内: ${isWithinSnapDistance ? '✅ 是' : '❌ 否'}`);
+        
+        if (isWithinSnapDistance) {
+          console.log(`✅ 检测到任务栏顶部吸附！(${snapDescription})`);
+          return 'taskbar-top';
+        } else {
+          console.log(`❌ 距离过远 (${distanceFromTaskbar}px > ${snapDistance}px)，未触发吸附`);
+        }
+      }
+    } else {
+      console.log('\n⏭️ 跳过任务栏检测（已禁用）');
+    }
+    
+    // 检测屏幕边缘吸附（顶部、左侧、右侧）
+    if (petStore.settings.snapConfig.snapToScreenEdges) {
+      console.log('\n🖥️ ========== 屏幕边缘吸附检测 ==========');
+      
+      // 检测顶部
+      const distanceToTop = windowPos.y;
+      console.log(`    - 距离顶部: ${distanceToTop} px (阈值: ${snapDistance} px)`);
+      if (distanceToTop < snapDistance) {
+        console.log('✅ 检测到屏幕顶部吸附！');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        return 'screen-top';
+      }
+      
+      // 检测左侧
+      const distanceToLeft = windowPos.x;
+      console.log(`    - 距离左侧: ${distanceToLeft} px (阈值: ${snapDistance} px)`);
+      if (distanceToLeft < snapDistance) {
+        console.log('✅ 检测到屏幕左侧吸附！');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        return 'screen-left';
+      }
+      
+      // 检测右侧
+      const distanceToRight = screenWidth - (windowPos.x + windowSize.width);
+      console.log(`    - 距离右侧: ${distanceToRight} px (阈值: ${snapDistance} px)`);
+      if (distanceToRight < snapDistance) {
+        console.log('✅ 检测到屏幕右侧吸附！');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+        return 'screen-right';
+      }
+      
+      console.log('❌ 未检测到屏幕边缘吸附');
+    } else {
+      console.log('\n⏭️ 跳过屏幕边缘检测（已禁用）');
+    }
+    
+    // 检测窗口吸附（检测桌面伙伴窗口中心区域是否在其他窗口上方）
+    if (petStore.settings.snapConfig.snapToWindows) {
+      console.log('\n🪟 ========== 窗口吸附检测 ==========');
+      
+      // 更新窗口列表缓存
+      const now = Date.now();
+      if (now - lastWindowsUpdate > WINDOWS_CACHE_TIME) {
+        console.log('🔄 更新窗口列表缓存...');
+        otherWindows = await getAllWindows();
+        lastWindowsUpdate = now;
+        console.log(`✅ 找到 ${otherWindows.length} 个窗口`);
+      } else {
+        console.log(`⏸️ 使用缓存的窗口列表 (${otherWindows.length} 个窗口)`);
+      }
+      
+      // 计算桌面伙伴窗口中心区域（取中间 60% 的区域）
+      const centerMargin = 0.2; // 20% 边距
+      const centerX = windowPos.x + windowSize.width * 0.5;
+      const centerY = windowPos.y + windowSize.height * 0.5;
+      const centerWidth = windowSize.width * (1 - 2 * centerMargin);
+      const centerHeight = windowSize.height * (1 - 2 * centerMargin);
+      const centerLeft = windowPos.x + windowSize.width * centerMargin;
+      const centerTop = windowPos.y + windowSize.height * centerMargin;
+      const centerRight = centerLeft + centerWidth;
+      const centerBottom = centerTop + centerHeight;
+      
+      console.log(`    - 中心检测区域: (${centerLeft}, ${centerTop}) - (${centerRight}, ${centerBottom})`);
+      console.log(`    - 中心区域大小: ${centerWidth}x${centerHeight}`);
+      
+      // 检测中心区域是否在其他窗口上方
+      for (const win of otherWindows) {
+        const winRight = win.x + win.width;
+        const winBottom = win.y + win.height;
+        
+        // 检查中心区域是否与窗口重叠
+        const overlapX = Math.max(0, Math.min(centerRight, winRight) - Math.max(centerLeft, win.x));
+        const overlapY = Math.max(0, Math.min(centerBottom, winBottom) - Math.max(centerTop, win.y));
+        const overlapArea = overlapX * overlapY;
+        const centerArea = centerWidth * centerHeight;
+        const overlapRatio = overlapArea / centerArea;
+        
+        console.log(`    - 窗口 "${win.title}": 重叠比例 ${(overlapRatio * 100).toFixed(1)}% (需要 > 50%)`);
+        
+        // 如果重叠面积超过中心区域的 50%，认为吸附到窗口
+        if (overlapArea > centerArea * 0.5) {
+          snappedWindowInfo.value = win;
+          console.log(`\n✅ 检测到窗口吸附: ${win.title}`);
+          console.log(`✅ 最终场景: window-top`);
+          console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+          return 'window-top';
+        }
+      }
+      
+      console.log('❌ 未检测到窗口吸附');
+    } else {
+      console.log('\n⏭️ 跳过窗口检测（已禁用）');
+    }
+    
+    console.log('\n📊 未检测到任何吸附场景');
+    console.log(`✅ 最终场景: idle`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    return 'idle';
+  } catch (error) {
+    console.error('\n❌ 检测吸附场景失败:', error);
+    console.log(`✅ 最终场景: idle (错误)`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    return 'idle';
+  }
+}
+
+// 应用吸附
+async function applySnap(scene: SnapSceneType) {
+  if (scene === 'idle' || !petStore.settings.snapConfig.enabled) {
+    return;
+  }
+  
+  try {
+    const windowSize = await appWindow.outerSize();
+    // 获取屏幕尺寸（考虑 DPI 缩放）
+    const dpiScale = window.devicePixelRatio || 1;
+    const screenWidth = window.screen.width * dpiScale;
+    const screenHeight = window.screen.height * dpiScale;
+    
+    let targetX = 0;
+    let targetY = 0;
+    
+    // 根据场景计算目标位置
+    if (scene === 'taskbar-top' && taskbarInfo) {
+      // 任务栏顶部吸附
+      const tb = taskbarInfo;
+      targetX = (screenWidth - windowSize.width) / 2;
+      
+      if (tb.position === 'top') {
+        // 任务栏在顶部：窗口顶部紧贴任务栏底部
+        targetY = tb.y + tb.height;
+      } else if (tb.position === 'bottom') {
+        // 任务栏在底部：窗口底部紧贴任务栏顶部
+        targetY = tb.y - windowSize.height;
+      } else {
+        // 其他位置暂不支持
+        console.warn(`⚠️ 任务栏位置 ${tb.position} 暂不支持吸附`);
+        return;
+      }
+      
+      // 确保不会超出屏幕边界
+      targetX = Math.max(0, Math.min(targetX, screenWidth - windowSize.width));
+      targetY = Math.max(0, Math.min(targetY, screenHeight - windowSize.height));
+      
+      console.log(`🧲 吸附到任务栏${tb.position === 'top' ? '底部' : '顶部'}: Y=${targetY}px`);
+    } else if (scene.startsWith('screen-')) {
+      // 屏幕边缘
+      switch (scene) {
+        case 'screen-top':
+          targetX = (screenWidth - windowSize.width) / 2;
+          targetY = 0;
+          break;
+        case 'screen-left':
+          targetX = 0;
+          targetY = (screenHeight - windowSize.height) / 2;
+          break;
+        case 'screen-right':
+          targetX = screenWidth - windowSize.width;
+          targetY = (screenHeight - windowSize.height) / 2;
+          break;
+      }
+    } else if (scene === 'window-top' && snappedWindowInfo.value) {
+      // 吸附到窗口上方中心位置
+      const win = snappedWindowInfo.value;
+      targetX = win.x + (win.width - windowSize.width) / 2;
+      targetY = win.y - windowSize.height;
+      
+      // 确保不会超出屏幕边界
+      targetX = Math.max(0, Math.min(targetX, screenWidth - windowSize.width));
+      targetY = Math.max(0, Math.min(targetY, screenHeight - windowSize.height));
+      
+      console.log(`🪟 吸附到窗口: "${win.title}"`);
+    }
+    
+    // 平滑移动到目标位置
+    await appWindow.setPosition(new LogicalPosition(Math.round(targetX), Math.round(targetY)));
+    console.log(`🧲 已吸附到: ${scene} (${Math.round(targetX)}, ${Math.round(targetY)})`);
+    
+  } catch (error) {
+    console.error('应用吸附失败:', error);
+  }
+}
+
+// 播放场景动画
+async function playSceneAnimation(scene: SnapSceneType) {
+  if (!petStore.settings.snapConfig.autoPlaySceneAnimation || !vrmLoader) {
+    return;
+  }
+  
+  // 查找对应场景的动画配置
+  const sceneConfig = petStore.settings.snapConfig.sceneAnimations.find(
+    s => s.sceneType === scene
+  );
+  
+  if (!sceneConfig || !sceneConfig.enabled || !sceneConfig.animationId) {
+    console.log(`ℹ️ 场景 ${scene} 未配置动画或已禁用`);
+    return;
+  }
+  
+  // 查找动画
+  const animation = petStore.settings.animationConfig.customAnimations.find(
+    a => a.id === sceneConfig.animationId
+  );
+  
+  if (!animation) {
+    console.warn(`⚠️ 未找到动画 ID: ${sceneConfig.animationId}`);
+    return;
+  }
+  
+  try {
+    console.log(`🎬 播放场景动画: ${scene} -> ${animation.name}`);
+    const success = await vrmLoader.loadCustomAnimation(
+      animation.filePath, 
+      animation.loop, 
+      petStore.settings.animationConfig.animationSpeed
+    );
+    
+    if (success) {
+      console.log(`✅ 场景动画播放成功: ${animation.name}`);
+      // 场景动画播放时，大幅降低碰撞检测频率以避免卡顿
+      updateCheckInterval(true, true);
+    }
+  } catch (error) {
+    console.error('播放场景动画失败:', error);
+  }
+}
+
+// 检测和处理吸附（定时调用）
+async function checkAndHandleSnap() {
+  if (!petStore.settings.snapConfig.enabled) {
+    return;
+  }
+  
+  if (!isDragging.value) {
+    return;
+  }
+  
+  console.log('\n⏰ ========== 定时检测吸附场景 ==========');
+  console.log(`    - 当前场景: ${currentScene.value}`);
+  console.log(`    - 任务栏信息: ${taskbarInfo ? `✅ ${taskbarInfo.position} (${taskbarInfo.x}, ${taskbarInfo.y}, ${taskbarInfo.width}x${taskbarInfo.height})` : '❌ 未检测'}`);
+  
+  const newScene = await detectSnapScene();
+  
+  console.log(`\n📊 检测结果: ${newScene}`);
+  
+  // 场景变化时
+  if (newScene !== currentScene.value) {
+    console.log(`\n🔄 ========== 场景变化 ==========`);
+    console.log(`    - 旧场景: ${currentScene.value}`);
+    console.log(`    - 新场景: ${newScene}`);
+    
+    const wasPlayingSceneAnimation = isPlayingSceneAnimation;
+    currentScene.value = newScene;
+    
+    if (newScene !== 'idle') {
+      console.log(`✅ 触发吸附: ${newScene}`);
+      isSnapped.value = true;
+      await applySnap(newScene);
+      await playSceneAnimation(newScene);
+    } else {
+      console.log(`❌ 离开吸附区域，返回空闲状态`);
+      isSnapped.value = false;
+      // 清除窗口吸附信息
+      snappedWindowInfo.value = null;
+      // 离开吸附区域，恢复正常检测频率
+      if (wasPlayingSceneAnimation) {
+        updateCheckInterval(false, false);
+        console.log('✓ 离开吸附区域，已恢复正常检测频率');
+      }
+    }
+  } else {
+    console.log(`⏸️ 场景未变化，保持: ${currentScene.value}`);
+  }
+  
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+}
+
+// 启动吸附检测
+async function startSnapDetection() {
+  if (!petStore.settings.snapConfig.enabled) {
+    console.log('⏭️ 吸附功能未启用，跳过启动');
+    return;
+  }
+  
+  console.log('\n🚀 ========== 启动吸附检测 ==========');
+  
+  // 确保任务栏信息是最新的
+  if (petStore.settings.snapConfig.snapToTaskbar) {
+    console.log('🔄 更新任务栏信息...');
+    taskbarInfo = await detectTaskbar();
+    if (taskbarInfo) {
+      console.log(`✅ 任务栏信息已更新: ${taskbarInfo.position} (${taskbarInfo.x}, ${taskbarInfo.y}, ${taskbarInfo.width}x${taskbarInfo.height})`);
+    } else {
+      console.log('⚠️ 未能检测到任务栏信息');
+    }
+  }
+  
+  if (snapCheckInterval !== null) {
+    clearInterval(snapCheckInterval);
+    console.log('🔄 清除旧的检测定时器');
+  }
+  
+  // 每200ms检测一次（拖动时）
+  snapCheckInterval = window.setInterval(checkAndHandleSnap, 200);
+  console.log('✅ 吸附检测已启动（每200ms检测一次）');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+}
+
+// 停止吸附检测
+function stopSnapDetection() {
+  if (snapCheckInterval !== null) {
+    clearInterval(snapCheckInterval);
+    snapCheckInterval = null;
+    console.log('🧲 吸附检测已停止');
+  }
+}
+
+// 获取任务栏吸附区域样式
+function getTaskbarZoneStyle() {
+  if (!taskbarInfo) return {};
+  
+  const tb = taskbarInfo;
+  const snapDistance = petStore.settings.snapConfig.snapDistance;
+  
+  // 相对于窗口的坐标（因为 snap-overlay 是绝对定位在窗口内）
+  // 我们需要计算任务栏相对于当前窗口的可视区域
+  
+  if (tb.position === 'bottom') {
+    return {
+      position: 'fixed',
+      bottom: '0',
+      left: '0',
+      right: '0',
+      height: `${snapDistance}px`,
+    };
+  } else if (tb.position === 'top') {
+    return {
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      right: '0',
+      height: `${snapDistance}px`,
+    };
+  } else if (tb.position === 'left') {
+    return {
+      position: 'fixed',
+      left: '0',
+      top: '0',
+      bottom: '0',
+      width: `${snapDistance}px`,
+    };
+  } else if (tb.position === 'right') {
+    return {
+      position: 'fixed',
+      right: '0',
+      top: '0',
+      bottom: '0',
+      width: `${snapDistance}px`,
+    };
+  }
+  
+  return {};
+}
+
+// 获取场景名称（用于显示）
+function getSceneName(scene: SnapSceneType): string {
+  const sceneNames: Record<SnapSceneType, string> = {
+    'idle': '空闲',
+    'taskbar-top': '任务栏顶部',
+    'screen-top': '屏幕顶部',
+    'screen-left': '屏幕左侧',
+    'screen-right': '屏幕右侧',
+    'window-top': '窗口上方',
+  };
+  
+  return sceneNames[scene] || scene;
+}
+
 </script>
 
 <style>
@@ -1418,6 +2331,386 @@ canvas {
   font-size: 10px;
   text-align: center;
 }
+
+/* ========== 智能吸附视觉反馈 ========== */
+
+/* 吸附覆盖层容器 */
+.snap-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 9999;
+  overflow: hidden;
+}
+
+/* 吸附区域基础样式 */
+.snap-zone {
+  position: fixed;
+  background: rgba(99, 102, 241, 0.15);
+  border: 2px dashed rgba(99, 102, 241, 0.4);
+  backdrop-filter: blur(8px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  opacity: 0;
+  transform: scale(0.95);
+  animation: snapZoneFadeIn 0.3s ease forwards;
+  pointer-events: none;
+}
+
+@keyframes snapZoneFadeIn {
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* 激活状态的吸附区域 */
+.snap-zone.active {
+  background: rgba(99, 102, 241, 0.35);
+  border-color: rgba(99, 102, 241, 0.8);
+  border-style: solid;
+  border-width: 3px;
+  box-shadow: 
+    0 0 20px rgba(99, 102, 241, 0.5),
+    inset 0 0 30px rgba(99, 102, 241, 0.2);
+  animation: snapZonePulse 1.5s ease-in-out infinite;
+}
+
+@keyframes snapZonePulse {
+  0%, 100% {
+    box-shadow: 
+      0 0 20px rgba(99, 102, 241, 0.5),
+      inset 0 0 30px rgba(99, 102, 241, 0.2);
+  }
+  50% {
+    box-shadow: 
+      0 0 40px rgba(99, 102, 241, 0.8),
+      inset 0 0 50px rgba(99, 102, 241, 0.4);
+  }
+}
+
+/* 吸附区域标签 */
+.snap-zone-label {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 8px 16px;
+  background: rgba(15, 23, 42, 0.9);
+  color: #e2e8f0;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  transition: all 0.3s ease;
+}
+
+.snap-zone.active .snap-zone-label {
+  background: rgba(99, 102, 241, 0.95);
+  color: #ffffff;
+  transform: translate(-50%, -50%) scale(1.1);
+  box-shadow: 0 6px 20px rgba(99, 102, 241, 0.6);
+}
+
+/* 屏幕边缘吸附区域 */
+.screen-zones {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.screen-zone {
+  position: fixed;
+}
+
+.screen-zone.screen-top {
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+}
+
+.screen-zone.screen-bottom {
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 60px;
+}
+
+.screen-zone.screen-left {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+}
+
+.screen-zone.screen-right {
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 60px;
+}
+
+/* 任务栏吸附区域（动态位置） */
+.taskbar-zone {
+  z-index: 10000;
+}
+
+/* 吸附状态指示器 */
+.snap-indicator {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(139, 92, 246, 0.95));
+  color: #ffffff;
+  border-radius: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5);
+  backdrop-filter: blur(10px);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  animation: snapIndicatorBounce 0.5s ease;
+  pointer-events: none;
+  z-index: 10001;
+}
+
+@keyframes snapIndicatorBounce {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-20px) scale(0.8);
+  }
+  50% {
+    transform: translateX(-50%) translateY(5px) scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+/* 磁性吸附效果 - 窗口拖动时的平滑过渡 */
+.pet-window {
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.pet-window.snapping {
+  transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 吸附点指示器（小圆点） */
+.snap-zone::before {
+  content: '';
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: rgba(99, 102, 241, 0.6);
+  border-radius: 50%;
+  animation: snapDotFloat 2s ease-in-out infinite;
+}
+
+.screen-top::before {
+  left: 50%;
+  top: 10px;
+  transform: translateX(-50%);
+}
+
+.screen-bottom::before {
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+}
+
+.screen-left::before {
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.screen-right::before {
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+@keyframes snapDotFloat {
+  0%, 100% {
+    opacity: 0.6;
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translateX(-50%) scale(1.5);
+  }
+}
+
+.snap-zone.active::before {
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.8);
+  animation: snapDotActive 1s ease-in-out infinite;
+}
+
+@keyframes snapDotActive {
+  0%, 100% {
+    transform: translateX(-50%) scale(1);
+  }
+  50% {
+    transform: translateX(-50%) scale(2);
+  }
+}
+
+/* 吸附粒子效果 */
+.snap-zone.active::after {
+  content: '';
+  position: absolute;
+  inset: -20px;
+  background: 
+    radial-gradient(circle at 20% 50%, rgba(99, 102, 241, 0.3) 0%, transparent 50%),
+    radial-gradient(circle at 80% 50%, rgba(139, 92, 246, 0.3) 0%, transparent 50%);
+  animation: snapParticles 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
+@keyframes snapParticles {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.6;
+    transform: scale(1.1);
+  }
+}
+
+/* ========== 窗口吸附检测区域 ========== */
+
+/* 窗口检测区域容器（中心60%区域） */
+.window-snap-detection-zone {
+  position: absolute;
+  left: 20%;
+  top: 20%;
+  width: 60%;
+  height: 60%;
+  pointer-events: none;
+  z-index: 10002;
+}
+
+/* 检测区域边框 */
+.detection-zone-border {
+  position: absolute;
+  inset: 0;
+  border: 2px dashed rgba(168, 85, 247, 0.6);
+  border-radius: 8px;
+  background: rgba(168, 85, 247, 0.08);
+}
+
+/* 激活状态 */
+.window-snap-detection-zone.active .detection-zone-border {
+  border: 3px solid rgba(168, 85, 247, 0.9);
+  background: rgba(168, 85, 247, 0.15);
+}
+
+/* 检测区域标签 */
+.detection-zone-label {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.95);
+  color: #6b21a8;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  border: 2px solid rgba(168, 85, 247, 0.6);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.window-snap-detection-zone.active .detection-zone-label {
+  background: rgba(168, 85, 247, 0.95);
+  color: #ffffff;
+  border-color: rgba(168, 85, 247, 0.9);
+}
+
+/* 检测到的窗口名称 */
+.detected-window {
+  font-size: 11px;
+  color: #581c87;
+  font-weight: 500;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.window-snap-detection-zone.active .detected-window {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+/* 四角装饰 */
+.detection-zone-corners {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.corner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 3px solid rgba(168, 85, 247, 0.7);
+}
+
+.corner-tl {
+  top: -2px;
+  left: -2px;
+  border-right: none;
+  border-bottom: none;
+  border-top-left-radius: 4px;
+}
+
+.corner-tr {
+  top: -2px;
+  right: -2px;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 4px;
+}
+
+.corner-bl {
+  bottom: -2px;
+  left: -2px;
+  border-right: none;
+  border-top: none;
+  border-bottom-left-radius: 4px;
+}
+
+.corner-br {
+  bottom: -2px;
+  right: -2px;
+  border-left: none;
+  border-top: none;
+  border-bottom-right-radius: 4px;
+}
+
+.window-snap-detection-zone.active .corner {
+  border-color: rgba(168, 85, 247, 0.95);
+  border-width: 3px;
+}
+
 </style>
 
 
