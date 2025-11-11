@@ -119,11 +119,12 @@ pnpm dev
 
 ## 📖 详细文档
 
-- **[立即开始](立即开始.md)** - 5 分钟快速入门 ⭐
-- **[快速开始指南](docs/快速开始指南.md)** - 完整的入门教程
-- **[开发文档](docs/Aurora开发文档（详细版）.md)** - 详细的技术文档
-- **[开发计划](docs/开发计划.md)** - 项目开发进度
-- **[项目搭建报告](项目搭建完成报告.md)** - 框架搭建总结
+- **[开发指南](开发指南.md)** - 完整的开发指南 ⭐
+- **[使用手册](使用手册.md)** - 用户使用说明
+- **[API 文档](API文档.md)** - IPC 通信和 API 参考
+- **[更新日志](CHANGELOG.md)** - 版本更新历史
+- **[贡献指南](docs/CONTRIBUTING.md)** - 如何贡献代码
+- **[详细开发文档](docs/Aurora开发文档（详细版）.md)** - 深入的技术架构文档
 
 ---
 
@@ -239,9 +240,10 @@ Aurora/
 
 如果您在使用过程中遇到问题，请：
 
-1. 查看 [常见问题](docs/Aurora开发文档（详细版）.md#12-常见问题与解决方案)
-2. 搜索 [已有 Issues](https://github.com/MitsuhaFe/aurora/issues)
-3. 如果问题未被报告，请 [创建新 Issue](https://github.com/MitsuhaFe/aurora/issues/new)
+1. 查看 [使用手册 - 常见问题](使用手册.md#常见问题)
+2. 查看 [使用手册 - 故障排除](使用手册.md#故障排除)
+3. 搜索 [已有 Issues](https://github.com/MitsuhaFe/aurora/issues)
+4. 如果问题未被报告，请 [创建新 Issue](https://github.com/MitsuhaFe/aurora/issues/new)
 
 ---
 
