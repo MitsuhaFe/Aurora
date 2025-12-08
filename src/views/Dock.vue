@@ -146,42 +146,38 @@ function hexToRgba(hex: string, alpha: number): string {
  * 关键：使用 rgba 颜色而不是 opacity 属性，避免影响子元素（图标）
  */
 const dockContainerStyle = computed(() => {
-  // 将背景色转换为 rgba 格式，应用透明度
-  const backgroundColor = hexToRgba(
-    dockStore.settings.backgroundColor,
-    dockStore.settings.opacity
-  );
-  
-  const style: Record<string, string> = {
+  const bg = dockStore.settings.backgroundColor || '#1e1e1e';
+  const opacity = dockStore.settings.opacity ?? 0.95;
+  const borderRadius = dockStore.settings.borderRadius ?? 16;
+  const hasShadow = dockStore.settings.hasShadow;
+  const hasGlass = dockStore.settings.hasGlassEffect;
+
+  // 将十六进制颜色转换为 RGBA，避免影响子元素
+  function hexToRgba(hex: string, alpha: number) {
+    const cleanHex = hex.replace('#', '');
+    const bigint = parseInt(cleanHex, 16);
+    const r = (bigint >> 16) & 255;
+    const g = (bigint >> 8) & 255;
+    const b = bigint & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+
+  const bgRgba = bg.startsWith('#') ? hexToRgba(bg, opacity) : bg;
+
+  const style: Record<string, string | number> = {
     width: `${dockStore.settings.width}px`,
     height: `${dockStore.settings.height}px`,
-    backgroundColor: backgroundColor, // 使用 rgba，不影响子元素
-    borderRadius: `${dockStore.settings.borderRadius}px`,
-    
-    // CSS 变量 - 用于自动隐藏 hover 状态恢复
-    '--dock-bg-color': backgroundColor,
+    backgroundColor: bgRgba,
+    borderRadius: `${borderRadius}px`,
+    transition: dockStore.settings.animations.smoothTransition ? 'background-color 120ms ease, border-radius 120ms ease' : 'none',
   };
 
-  // 阴影效果
-  if (dockStore.settings.hasShadow) {
-    style.boxShadow = '0 8px 32px rgba(0, 0, 0, 0.3)';
-    style['--dock-shadow'] = '0 8px 32px rgba(0, 0, 0, 0.3)';
-  } else {
-    style.boxShadow = 'none';
-    style['--dock-shadow'] = 'none';
+  if (hasShadow) {
+    style.boxShadow = '0 8px 24px rgba(0, 0, 0, 0.25)';
   }
-
-  // 毛玻璃效果
-  if (dockStore.settings.hasGlassEffect) {
-    style.backdropFilter = 'blur(20px)';
-    style.webkitBackdropFilter = 'blur(20px)';
-    style['--dock-backdrop'] = 'blur(20px)';
-  } else {
-    style.backdropFilter = 'none';
-    style.webkitBackdropFilter = 'none';
-    style['--dock-backdrop'] = 'none';
+  if (hasGlass) {
+    style.backdropFilter = 'blur(16px)';
   }
-
   return style;
 });
 
@@ -515,24 +511,23 @@ function handleContextMenu(event: MouseEvent, icon: any) {
 /**
  * 监听 localStorage 变化（从其他窗口同步）
  */
+// ... existing code ...
+// storage 同步：改用 store 暴露的 sync 方法，避免循环
 function handleStorageChange(e: StorageEvent) {
   if (e.key === 'aurora-dock-settings' && e.newValue) {
     try {
-      const newSettings = JSON.parse(e.newValue);
-      // 更新本地 store（触发响应式更新）
-      Object.assign(dockStore.settings, newSettings);
-      console.log('🔄 从主窗口同步了设置');
-    } catch (error) {
-      console.error('解析设置失败:', error);
+      const incoming = JSON.parse(e.newValue);
+      dockStore.syncSettingsFromStorage(incoming);
+    } catch (err) {
+      console.error('Dock.vue storage settings parse error:', err);
     }
-  } else if (e.key === 'aurora-dock-icons' && e.newValue) {
+  }
+  if (e.key === 'aurora-dock-icons' && e.newValue) {
     try {
-      const newIcons = JSON.parse(e.newValue);
-      dockStore.icons.length = 0;
-      dockStore.icons.push(...newIcons);
-      console.log('🔄 从主窗口同步了图标');
-    } catch (error) {
-      console.error('解析图标失败:', error);
+      const incomingIcons = JSON.parse(e.newValue);
+      dockStore.syncIconsFromStorage(incomingIcons);
+    } catch (err) {
+      console.error('Dock.vue storage icons parse error:', err);
     }
   }
 }

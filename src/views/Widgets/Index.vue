@@ -146,7 +146,7 @@ function updateCursor(e: MouseEvent) {
 
 // 监听 localStorage 变化（跨窗口同步）
 function handleStorageChange(e: StorageEvent) {
-  if (e.key === 'aurora-widget-settings' && widgetId) {
+  if (e.key === 'aurora-widgets-settings' && widgetId) {
     console.log('🔄 检测到设置变化，重新加载小组件设置');
     
     // 重新加载设置
@@ -403,4 +403,5 @@ html, body {
   opacity: 0.7;
 }
 </style>
+
 

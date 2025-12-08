@@ -861,6 +861,25 @@ export const useDockStore = defineStore('dock', () => {
     loadSettings,
     saveSettings,
     verifySettings,
+
+    // 新增：从 storage 同步（避免触发保存循环）
+    syncSettingsFromStorage(newSettings: Partial<DockSettings>) {
+      // 暂停 watch 保存，防止回写造成循环
+      isLoadingSettings = true;
+      try {
+        settings.value = { ...settings.value, ...newSettings };
+      } finally {
+        setTimeout(() => { isLoadingSettings = false; }, 50);
+      }
+    },
+    syncIconsFromStorage(newIcons: DockIcon[]) {
+      isLoadingSettings = true;
+      try {
+        icons.value.length = 0;
+        icons.value.push(...newIcons);
+      } finally {
+        setTimeout(() => { isLoadingSettings = false; }, 50);
+      }
+    },
   };
 });
-

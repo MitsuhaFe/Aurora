@@ -1233,16 +1233,14 @@ async function handleWidgetPropertyChange() {
 
 // 通知小组件窗口更新
 function notifyWidgetUpdate() {
-  // 触发 storage 事件通知其他窗口
-  // 通过先移除再设置来触发 storage 事件
-  const currentData = localStorage.getItem('aurora-widget-settings');
-  localStorage.removeItem('aurora-widget-settings');
+  // 使用正确的存储键触发跨窗口 storage 事件
+  const STORAGE_KEY = 'aurora-widgets-settings';
+  const currentData = localStorage.getItem(STORAGE_KEY) || JSON.stringify(widgetStore.widgets);
+  localStorage.removeItem(STORAGE_KEY);
   
   // 使用 setTimeout 确保 remove 事件先触发
   setTimeout(() => {
-    if (currentData) {
-      localStorage.setItem('aurora-widget-settings', currentData);
-    }
+    localStorage.setItem(STORAGE_KEY, currentData);
     console.log('📢 已通知小组件窗口更新设置');
   }, 10);
 }
@@ -1257,7 +1255,7 @@ function handleStorageChange(e: StorageEvent) {
   if (e.key === 'aurora-dock-settings' && e.newValue) {
     try {
       const newSettings = JSON.parse(e.newValue);
-      Object.assign(dockStore.settings, newSettings);
+      dockStore.syncSettingsFromStorage(newSettings);
       console.log('🔄 从 Dock 窗口同步了设置');
     } catch (error) {
       console.error('❌ 解析设置失败:', error);
@@ -1267,8 +1265,7 @@ function handleStorageChange(e: StorageEvent) {
   else if (e.key === 'aurora-dock-icons' && e.newValue) {
     try {
       const newIcons = JSON.parse(e.newValue);
-      dockStore.icons.length = 0;
-      dockStore.icons.push(...newIcons);
+      dockStore.syncIconsFromStorage(newIcons);
       console.log('🔄 从 Dock 窗口同步了图标列表');
     } catch (error) {
       console.error('❌ 解析图标失败:', error);
